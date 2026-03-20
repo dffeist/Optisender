@@ -70,7 +70,7 @@ def main():
             else:
                 print("\n[SIMULATION] Press Enter to simulate a swing... (Ctrl+C to exit)")
                 input()
-                data = simulation.generate_simulated_shot()
+                data = simulation.generate_simulated_shot(user_club)
 
             if data:
                 # A swing has been detected. The device sends a non-empty packet.
