@@ -2,12 +2,17 @@ import hid
 import time
 import sys
 import random
+import socket
+import json
 import simulation
 from ballphysics import PhysicsEngine
 
 # OptiShot 2 Vendor ID and Product ID, as seen in usbcode.cpp
 VID = 0x0547
 PID = 0x3294
+
+API_IP = "127.0.0.1"
+API_PORT = 3111
 
 def main():
     """
@@ -26,6 +31,7 @@ def main():
     device = None
     device_open = False
     simulation_mode = False
+    api_socket = None
 
     try:
         print(f"Attempting to open device with VID=0x{VID:04X} PID=0x{PID:04X}")
@@ -58,6 +64,17 @@ def main():
         print(f"Connection failed: {ex}")
         print("Device not found or not accessible. Switching to SIMULATION MODE.")
         simulation_mode = True
+
+    # Initialize API Connection (Attempt regardless of Hardware or Simulation mode)
+    try:
+        print(f"Attempting API Connection to {API_IP}:{API_PORT}...")
+        api_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        api_socket.settimeout(2.0) # Don't hang forever if API is down
+        api_socket.connect((API_IP, API_PORT))
+        print(f"SUCCESS: Connected to OpenGolfSim API at {API_IP}:{API_PORT}")
+        api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
+    except Exception as e:
+        print(f"API Connection FAILED (running offline): {e}")
 
     try:
         # This loop is the Python equivalent of the while(keep_polling)
@@ -102,6 +119,24 @@ def main():
                     print(f"  Spin:    {ball.total_spin:.0f} rpm")
                     print(f"  Axis:    {ball.spin_axis:.1f} deg (Curve)")
                     print("="*30 + "\n")
+                    
+                    # 4. Send Shot to API
+                    if api_socket:
+                        payload = {
+                            "type": "shot",
+                            "shot": {
+                                "ballSpeed": ball.ball_speed,
+                                "verticalLaunchAngle": ball.launch_angle,
+                                "horizontalLaunchAngle": ball.launch_direction,
+                                "spinSpeed": ball.total_spin,
+                                "spinAxis": ball.spin_axis
+                            }
+                        }
+                        try:
+                            api_socket.sendall(json.dumps(payload).encode('utf-8'))
+                            print(">> Shot data sent to API.")
+                        except Exception as e:
+                            print(f"Error sending to API: {e}")
                 else:
                     print("Swing detected but data signal too weak or partial.")
 
@@ -142,6 +177,8 @@ def main():
                 print("Device closed.")
             except Exception:
                 pass
+        if api_socket:
+            api_socket.close()
 
 if __name__ == '__main__':
     main()
