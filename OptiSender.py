@@ -4,6 +4,13 @@ import sys
 import random
 import socket
 import json
+import select
+try:
+    from pynput import keyboard
+except ImportError:
+    keyboard = None
+    print("Warning: pynput not found. Install via 'pip install pynput'.")
+
 import simulation
 from ballphysics import PhysicsEngine
 
@@ -14,6 +21,8 @@ PID = 0x3294
 API_IP = "127.0.0.1"
 API_PORT = 3111
 
+CLUBS = ["Driver", "3W", "5W", "5H", "3I", "4I", "5I", "6I", "7I", "8I", "9I", "PW", "GW", "SW", "LW", "Putter"]
+
 def main():
     """
     Connects to an OptiShot device and reads swing data packets.
@@ -23,15 +32,33 @@ def main():
     physics = PhysicsEngine()
     
     print("--- OptiSender v2 with Physics ---")
-    user_club = input("Enter Club (Driver, 3W, 5W, 5H, 5I..9I, PW, GW, SW, LW, Putter): ").strip()
-    if not user_club: 
-        user_club = "Driver"
+    user_club = "Driver" # Default to Driver on start
     print(f"Selected Club: {user_club}")
 
     device = None
     device_open = False
     simulation_mode = False
     api_socket = None
+    api_buffer = ""
+    last_heartbeat_time = time.time()
+    
+    # Simulation Input State (Mutable object to be accessible in callback)
+    sim_input = {"trigger": False, "club_shift": 0}
+
+    def on_press(key):
+        try:
+            if hasattr(key, 'char') and key.char.lower() == 's':
+                sim_input["trigger"] = True
+        except AttributeError:
+            pass
+        if key == keyboard.Key.enter:
+            sim_input["trigger"] = True
+        if key == keyboard.Key.up:
+            sim_input["club_shift"] = 1
+        elif key == keyboard.Key.down:
+            sim_input["club_shift"] = -1
+
+    listener = None
 
     try:
         print(f"Attempting to open device with VID=0x{VID:04X} PID=0x{PID:04X}")
@@ -76,18 +103,123 @@ def main():
     except Exception as e:
         print(f"API Connection FAILED (running offline): {e}")
 
+    # Enable keyboard listener for Simulation triggers AND Manual Club selection
+    if keyboard:
+        print("\n[INPUT] Keyboard control active.")
+        print("  UP/DOWN: Cycle Manual Club Selection")
+        if simulation_mode:
+            print("  S / ENTER: Trigger Simulated Swing")
+        listener = keyboard.Listener(on_press=on_press)
+        listener.start()
+    else:
+        print("\n[INPUT] 'pynput' not found. Manual controls disabled.")
+
     try:
         # This loop is the Python equivalent of the while(keep_polling)
         # loop inside the optiPolling function in usbcode.cpp
         while True:
+            # Check for manual club change
+            if sim_input["club_shift"] != 0:
+                direction = sim_input["club_shift"]
+                sim_input["club_shift"] = 0 # Reset
+                
+                try:
+                    current_idx = CLUBS.index(user_club)
+                except ValueError:
+                    current_idx = 0 # Default to Driver if unknown
+                
+                new_idx = (current_idx + direction) % len(CLUBS)
+                user_club = CLUBS[new_idx]
+                print(f"*** MANUAL CLUB SELECT: {user_club} ***")
+
+            # Send Heartbeat/Trigger message every 0.5 seconds
+            if api_socket and (time.time() - last_heartbeat_time > 0.5):
+                try:
+                    # Sending "ready" status acts as a heartbeat/null message to trigger replies
+                    api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
+                    last_heartbeat_time = time.time()
+                except Exception:
+                    print("API Heartbeat failed.")
+                    api_socket.close()
+                    api_socket = None
+
+            # Check for incoming API messages (Player/Club Updates)
+            if api_socket:
+                try:
+                    # Non-blocking check for data
+                    readable, _, _ = select.select([api_socket], [], [], 0)
+                    if readable:
+                        new_data = api_socket.recv(4096).decode('utf-8')
+                        if new_data:
+                            api_buffer += new_data
+                            # Process all complete JSON objects that might be in the buffer
+                            while api_buffer:
+                                # 1. Strip leading whitespace/newlines so raw_decode finds the JSON start
+                                api_buffer = api_buffer.lstrip()
+                                if not api_buffer:
+                                    break
+
+                                try:
+                                    decoder = json.JSONDecoder()
+                                    msg_json, end_index = decoder.raw_decode(api_buffer)
+
+                                    # A complete message was decoded
+                                    
+                                    # Only print message if it's NOT a generic status 200 heartbeat ack
+                                    if msg_json.get("status") != 200 and msg_json.get("code") != 200:
+                                        print(f"\n[API IN] {json.dumps(msg_json)}")
+
+                                    if msg_json.get("type") == "player":
+                                        print("\n[API] PLAYER UPDATE RECEIVED")
+                                        club_data = msg_json.get("data", {}).get("club", {})
+                                        cid = club_data.get("id", "")
+                                        cname = club_data.get("name", "")
+                                        
+                                        if cid: # Only update if a club ID was found
+                                            # Map API ID to Internal ID
+                                            if cid == "DR" or cid == "1W": new_club = "Driver"
+                                            elif cid == "PT": new_club = "Putter"
+                                            elif cid in ["AW", "UW"]: new_club = "GW"
+                                            else: new_club = cid # Direct match for 3W, 5I, PW, etc.
+
+                                            if new_club != user_club:
+                                                user_club = new_club
+                                                print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) ***")
+
+                                    elif msg_json.get("type") == "result":
+                                        print("\n[API] PREVIOUS SHOT RESULT RECEIVED")
+                                        res_data = msg_json.get("data", {}).get("result", {})
+                                        print(f"  Carry:   {res_data.get('carry', 0):.1f}")
+                                        print(f"  Total:   {res_data.get('total', 0):.1f}")
+                                        print(f"  Offline: {res_data.get('lateral', 0):.1f}")
+                                        print("  (Club selection ignored from result packet)")
+
+                                    # Trim the processed message from the buffer
+                                    api_buffer = api_buffer[end_index:]
+                                except json.JSONDecodeError:
+                                    # Incomplete message in buffer, break and wait for more data
+                                    break
+                        else:
+                            # Empty string means remote side closed connection
+                            print("API Connection Closed by Server.")
+                            api_socket.close()
+                            api_socket = None
+                except Exception as e:
+                    print(f"API Receive Error: {e}")
+                    if api_socket: 
+                        api_socket.close()
+                        api_socket = None
+
             data = None
             if not simulation_mode:
                 # Read a 60-byte report.
                 data = device.read(60)
             else:
-                print("\n[SIMULATION] Press Enter to simulate a swing... (Ctrl+C to exit)")
-                input()
-                data = simulation.generate_simulated_shot(user_club)
+                # Simulation mode: non-blocking check for input
+                if sim_input["trigger"]:
+                    print("\n[SIMULATION] Triggering simulated swing (Manual)...")
+                    data = simulation.generate_simulated_shot(user_club)
+                    sim_input["trigger"] = False
 
             if data:
                 # A swing has been detected. The device sends a non-empty packet.
@@ -133,6 +265,7 @@ def main():
                             }
                         }
                         try:
+                            print(f"\n[API OUT] Sending Shot: {json.dumps(payload, indent=2)}")
                             api_socket.sendall(json.dumps(payload).encode('utf-8'))
                             print(">> Shot data sent to API.")
                         except Exception as e:
@@ -162,9 +295,8 @@ def main():
                 else:
                     time.sleep(1)
 
-            # A small delay to prevent the loop from consuming 100% CPU
-            if not simulation_mode:
-                time.sleep(0.05)
+            # A small delay to prevent the loop from consuming 100% CPU, applicable to both modes
+            time.sleep(0.01)
 
     except KeyboardInterrupt:
         print("\nExiting...")
@@ -179,6 +311,8 @@ def main():
                 pass
         if api_socket:
             api_socket.close()
+        if listener:
+            listener.stop()
 
 if __name__ == '__main__':
     main()
