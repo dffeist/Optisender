@@ -1,7 +1,5 @@
 import hid
 import time
-import sys
-import random
 import socket
 import json
 import select
