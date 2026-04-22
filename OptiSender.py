@@ -1,4 +1,3 @@
-import hid
 import time
 import socket
 import json
@@ -11,10 +10,9 @@ except ImportError:
 
 import simulation
 from ballphysics import PhysicsEngine
-
-# OptiShot 2 Vendor ID and Product ID, as seen in usbcode.cpp
-VID = 0x0547
-PID = 0x3294
+from opti_reader import OptiReader
+from data_filters import OptiFilter
+from shot_processor import ShotProcessor
 
 API_IP = "127.0.0.1"
 API_PORT = 3111
@@ -24,23 +22,26 @@ CLUBS = ["Driver", "3W", "5W", "5H", "3I", "4I", "5I", "6I", "7I", "8I", "9I", "
 def main():
     """
     Connects to an OptiShot device and reads swing data packets.
+    Includes updated HID report formatting for hardware compatibility.
     """
     
     # Initialize Physics Engine
     physics = PhysicsEngine()
+    reader = OptiReader()
+    filters = OptiFilter()
+    processor = ShotProcessor()
     
     print("--- OptiSender v2 with Physics ---")
     user_club = "Driver" # Default to Driver on start
     print(f"Selected Club: {user_club}")
 
-    device = None
-    device_open = False
     simulation_mode = False
     api_socket = None
     api_buffer = ""
     last_heartbeat_time = time.time()
+    last_connection_attempt = 0
     
-    # Simulation Input State (Mutable object to be accessible in callback)
+    # Simulation Input State
     sim_input = {"trigger": False, "club_shift": 0}
 
     def on_press(key):
@@ -59,49 +60,34 @@ def main():
     listener = None
 
     try:
-        print(f"Attempting to open device with VID=0x{VID:04X} PID=0x{PID:04X}")
-
-        # Open the device
-        device = hid.device()
-        device.open(VID, PID)
-        device_open = True
-
-        print(f"Device opened successfully!")
-        print(f"  Manufacturer: {device.get_manufacturer_string()}")
-        print(f"  Product:      {device.get_product_string()}")
-
-        # This is equivalent to hid_set_nonblocking(dev, 1) in usbcode.cpp
-        device.set_nonblocking(1)
-
-        # This is equivalent to the opti_init sequence that turns the LED green
-        # and prepares the device for reading.
-        # 0x50: Turn on sensors
-        # 0x52: Turn LED Green
-        print("Initializing OptiShot sensors and LED...")
-        device.write([0x50] + [0x00] * 59) # Command must be full report length
-        time.sleep(0.1)
-        device.write([0x52] + [0x00] * 59)
-        time.sleep(0.1)
-
+        if not reader.connect():
+            raise ConnectionError("Hardware not found")
         print("\nReady for a swing. Waiting for data...")
-
-    except (IOError, ValueError) as ex:
+    except (IOError, ValueError, ConnectionError) as ex:
         print(f"Connection failed: {ex}")
         print("Device not found or not accessible. Switching to SIMULATION MODE.")
         simulation_mode = True
 
-    # Initialize API Connection (Attempt regardless of Hardware or Simulation mode)
-    try:
-        print(f"Attempting API Connection to {API_IP}:{API_PORT}...")
-        api_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        api_socket.settimeout(2.0) # Don't hang forever if API is down
-        api_socket.connect((API_IP, API_PORT))
-        print(f"SUCCESS: Connected to OpenGolfSim API at {API_IP}:{API_PORT}")
-        api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
-    except Exception as e:
-        print(f"API Connection FAILED (running offline): {e}")
+    def try_api_connect():
+        nonlocal api_socket, last_connection_attempt
+        if api_socket is not None:
+            return
+        
+        now = time.time()
+        if now - last_connection_attempt < 5.0: # Retry every 5 seconds
+            return
+            
+        last_connection_attempt = now
+        try:
+            api_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            api_socket.settimeout(2.0)
+            api_socket.connect((API_IP, API_PORT))
+            print(f"SUCCESS: Connected to OpenGolfSim API at {API_IP}:{API_PORT}")
+            api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
+        except Exception:
+            api_socket = None
 
-    # Enable keyboard listener for Simulation triggers AND Manual Club selection
+    # Enable keyboard listener
     if keyboard:
         print("\n[INPUT] Keyboard control active.")
         print("  UP/DOWN: Cycle Manual Club Selection")
@@ -113,27 +99,27 @@ def main():
         print("\n[INPUT] 'pynput' not found. Manual controls disabled.")
 
     try:
-        # This loop is the Python equivalent of the while(keep_polling)
-        # loop inside the optiPolling function in usbcode.cpp
         while True:
             # Check for manual club change
             if sim_input["club_shift"] != 0:
                 direction = sim_input["club_shift"]
-                sim_input["club_shift"] = 0 # Reset
+                sim_input["club_shift"] = 0 
                 
                 try:
                     current_idx = CLUBS.index(user_club)
                 except ValueError:
-                    current_idx = 0 # Default to Driver if unknown
+                    current_idx = 0 
                 
                 new_idx = (current_idx + direction) % len(CLUBS)
                 user_club = CLUBS[new_idx]
                 print(f"*** MANUAL CLUB SELECT: {user_club} ***")
 
-            # Send Heartbeat/Trigger message every 0.5 seconds
+            # Attempt API reconnection if offline
+            try_api_connect()
+
+            # Send Heartbeat every 0.5 seconds
             if api_socket and (time.time() - last_heartbeat_time > 0.5):
                 try:
-                    # Sending "ready" status acts as a heartbeat/null message to trigger replies
                     api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
                     last_heartbeat_time = time.time()
                 except Exception:
@@ -141,65 +127,45 @@ def main():
                     api_socket.close()
                     api_socket = None
 
-            # Check for incoming API messages (Player/Club Updates)
+            # Check for incoming API messages
             if api_socket:
                 try:
-                    # Non-blocking check for data
                     readable, _, _ = select.select([api_socket], [], [], 0)
                     if readable:
                         new_data = api_socket.recv(4096).decode('utf-8')
                         if new_data:
                             api_buffer += new_data
-                            # Process all complete JSON objects that might be in the buffer
                             while api_buffer:
-                                # 1. Strip leading whitespace/newlines so raw_decode finds the JSON start
                                 api_buffer = api_buffer.lstrip()
-                                if not api_buffer:
-                                    break
-
+                                if not api_buffer: break
                                 try:
                                     decoder = json.JSONDecoder()
                                     msg_json, end_index = decoder.raw_decode(api_buffer)
-
-                                    # A complete message was decoded
-                                    
-                                    # Only print message if it's NOT a generic status 200 heartbeat ack
                                     if msg_json.get("status") != 200 and msg_json.get("code") != 200:
                                         print(f"\n[API IN] {json.dumps(msg_json)}")
 
                                     if msg_json.get("type") == "player":
-                                        print("\n[API] PLAYER UPDATE RECEIVED")
                                         club_data = msg_json.get("data", {}).get("club", {})
                                         cid = club_data.get("id", "")
                                         cname = club_data.get("name", "")
-                                        
-                                        if cid: # Only update if a club ID was found
-                                            # Map API ID to Internal ID
+                                        if cid:
                                             if cid == "DR" or cid == "1W": new_club = "Driver"
                                             elif cid == "PT": new_club = "Putter"
                                             elif cid in ["AW", "UW"]: new_club = "GW"
-                                            else: new_club = cid # Direct match for 3W, 5I, PW, etc.
+                                            else: new_club = cid 
 
                                             if new_club != user_club:
                                                 user_club = new_club
                                                 print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) ***")
 
                                     elif msg_json.get("type") == "result":
-                                        print("\n[API] PREVIOUS SHOT RESULT RECEIVED")
                                         res_data = msg_json.get("data", {}).get("result", {})
-                                        print(f"  Carry:   {res_data.get('carry', 0):.1f}")
-                                        print(f"  Total:   {res_data.get('total', 0):.1f}")
-                                        print(f"  Offline: {res_data.get('lateral', 0):.1f}")
-                                        print("  (Club selection ignored from result packet)")
+                                        print(f"\n[API] SHOT RESULT: Carry: {res_data.get('carry', 0):.1f} | Total: {res_data.get('total', 0):.1f}")
 
-                                    # Trim the processed message from the buffer
                                     api_buffer = api_buffer[end_index:]
                                 except json.JSONDecodeError:
-                                    # Incomplete message in buffer, break and wait for more data
                                     break
                         else:
-                            # Empty string means remote side closed connection
-                            print("API Connection Closed by Server.")
                             api_socket.close()
                             api_socket = None
                 except Exception as e:
@@ -208,49 +174,40 @@ def main():
                         api_socket.close()
                         api_socket = None
 
+            # Get Swing Data
             data = None
             if not simulation_mode:
-                # Read a 60-byte report.
-                data = device.read(60)
+                data = reader.read_raw()
             else:
-                # Simulation mode: non-blocking check for input
                 if sim_input["trigger"]:
-                    print("\n[SIMULATION] Triggering simulated swing (Manual)...")
+                    print("\n[SIMULATION] Triggering simulated swing...")
                     data = simulation.generate_simulated_shot(user_club)
                     sim_input["trigger"] = False
 
             if data:
-                # A swing has been detected. The device sends a non-empty packet.
-                print(f"--- Swing Data Received ({len(data)} bytes) ---")
+                # Apply duplicate and validity filters
+                if filters.is_duplicate(data) or not filters.is_valid_swing(data):
+                    continue
+
+                print(f"--- Valid Swing Detected ---")
+                metrics = processor.process_raw_buffer(data)
                 
-                # Here, you would pass 'data' to a Python function equivalent
-                # to processShotData() in shotprocessing.cpp
-                # 1. Process Raw Data -> Club Data
-                shot_data = physics.process_raw_data(data)
-                
-                if shot_data.swing_detected:
-                    # 2. Calculate Ball Flight
-                    ball = physics.calculate_ball_flight(shot_data, user_club)
+                if metrics:
+                    ball = physics.calculate_ball_flight(metrics, user_club)
+
                     
-                    # 3. Output Results
                     print("\n" + "="*30)
                     print(f" CLUB INPUT: {user_club}")
                     print("-" * 30)
                     print(f" CLUB DATA ({'SIMULATED' if simulation_mode else 'OptiShot'}):")
-                    print(f"  Speed:   {shot_data.club_speed:.1f} mph")
-                    print(f"  Face:    {shot_data.face_angle:.1f} deg (Neg=Closed/Pos=Open)")
-                    print(f"  Path:    {shot_data.path:.1f} (Raw index delta)")
-                    print(f"  Contact: {shot_data.face_contact:.1f} (0=Center)")
+                    print(f"  Speed:   {metrics['speed']:.1f} mph")
+                    print(f"  Face:    {metrics['face_angle']:.1f} deg")
                     print("-" * 30)
                     print(f" BALL FLIGHT (Calculated):")
                     print(f"  Speed:   {ball.ball_speed:.1f} mph")
-                    print(f"  Launch:  {ball.launch_angle:.1f} deg")
-                    print(f"  HLA:     {ball.launch_direction:.1f} deg")
                     print(f"  Spin:    {ball.total_spin:.0f} rpm")
-                    print(f"  Axis:    {ball.spin_axis:.1f} deg (Curve)")
                     print("="*30 + "\n")
                     
-                    # 4. Send Shot to API
                     if api_socket:
                         payload = {
                             "type": "shot",
@@ -263,48 +220,32 @@ def main():
                             }
                         }
                         try:
-                            print(f"\n[API OUT] Sending Shot: {json.dumps(payload, indent=2)}")
                             api_socket.sendall(json.dumps(payload).encode('utf-8'))
                             print(">> Shot data sent to API.")
                         except Exception as e:
                             print(f"Error sending to API: {e}")
-                else:
-                    print("Swing detected but data signal too weak or partial.")
-
+                
+                # Device LED Feedback Loop
                 if not simulation_mode:
-                    # The device LED turns red during processing. We can simulate this.
-                    # 0x51: Turn LED Red
                     try:
-                        device.write([0x51] + [0x00] * 59)
+                        reader.set_led_red()
+                        time.sleep(2.5) # Wait for simulation to be ready
+                        reader.set_led_green()
+                        print("\nReady for a swing. Waiting for data...")
                     except Exception:
                         print("Device communication lost.")
-                        break
-
-                    # In RepliShot, there's a SHOTSLEEPTIME of 2.5 seconds
-                    # to process the shot and wait before accepting a new one.
-                    time.sleep(2.5)
-
-                    # Turn the LED green again, ready for the next shot.
-                    print("\nReady for a swing. Waiting for data...")
-                    try:
-                        device.write([0x52] + [0x00] * 59)
-                    except Exception:
                         break
                 else:
                     time.sleep(1)
 
-            # A small delay to prevent the loop from consuming 100% CPU, applicable to both modes
             time.sleep(0.01)
 
     except KeyboardInterrupt:
         print("\nExiting...")
     finally:
-        if device_open and device and not simulation_mode:
-            # Turn off LED and sensors before closing
+        if not simulation_mode:
             try:
-                device.write([0x80] + [0x00] * 59)
-                device.close()
-                print("Device closed.")
+                reader.disconnect()
             except Exception:
                 pass
         if api_socket:
