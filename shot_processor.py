@@ -65,7 +65,10 @@ class ShotProcessor:
 
         # PASS 2: Face Angle (Trigonometric logic)
         face_angle = self._calculate_face_angle(data, elapsed_time, ball_skip_idx)
-        path = (max_front - max_back) + (min_front - min_back)
+        centroid_front = ((min_front + max_front) / 2.0) * self.LED_SPACING
+        centroid_back  = ((min_back  + max_back)  / 2.0) * self.LED_SPACING
+        lateral_delta  = centroid_front - centroid_back
+        path = math.degrees(math.atan2(lateral_delta, self.SENSOR_SPACING))
 
         # Calculate Smash Factor (from RepliShot shotprocessing.cpp:232)
         if max_back == 0: smash_factor = 0.5
@@ -83,7 +86,7 @@ class ShotProcessor:
         return {
             "speed": round(swing_speed, 1),
             "face_angle": round(face_angle, 1),
-            "path": path, # Raw integer path
+            "path": round(path, 1),
             "contact": face_contact, # Heel/Toe offset
             "smash_factor": smash_factor,
             "raw_min_back": min_back,
