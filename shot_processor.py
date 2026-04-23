@@ -1,14 +1,25 @@
 import math
+import json
+import os
 
 class ShotProcessor:
     """
     Translates raw OptiShot sensor data into physical club metrics.
     """
-    def __init__(self):
-        # Constants 
+    def __init__(self, tuning_file="tuning.json"):
+        # Constants
         self.SENSOR_SPACING = 185     # Hardware tick units (matches RepliShot SENSORSPACING)
         self.LED_SPACING = 15         # Hardware tick units (matches RepliShot LEDSPACING)
         self.MPH_CONV = 2236.94       # Conversion to MPH
+
+        tuning = {}
+        if os.path.exists(tuning_file):
+            try:
+                with open(tuning_file, 'r') as f:
+                    tuning = json.load(f)
+            except Exception:
+                pass
+        self.SPEED_CAL = tuning.get("SpeedCalibration", 1.10)
 
     def process_raw_buffer(self, data, using_ball=True):
         """
@@ -45,14 +56,14 @@ class ShotProcessor:
             if opcode == 0x4A:
                 if first_front:
                     first_front = False
-                    swing_speed = (self.SENSOR_SPACING / (elapsed_time * 18.0)) * self.MPH_CONV
+                    swing_speed = (self.SENSOR_SPACING / (elapsed_time * 18.0)) * self.MPH_CONV * self.SPEED_CAL
                 elif using_ball and not no_ball:
                     if potential_ball_read:
                         if gap < 0x20:
                             # Confirm ball hit: adjust speed to exclude impact duration
                             prev_gap = (data[i - 2] << 8) | data[i - 1]
                             adj_time = elapsed_time - prev_gap
-                            swing_speed = (self.SENSOR_SPACING / (adj_time * 18.0)) * self.MPH_CONV
+                            swing_speed = (self.SENSOR_SPACING / (adj_time * 18.0)) * self.MPH_CONV * self.SPEED_CAL
                             ball_skip_idx = i - 5
                             potential_ball_read = False
                         else:
@@ -65,10 +76,11 @@ class ShotProcessor:
 
         # PASS 2: Face Angle (Trigonometric logic)
         face_angle = self._calculate_face_angle(data, elapsed_time, ball_skip_idx)
+        path = (max_front - max_back) + (min_front - min_back)  # integer, used by physics
         centroid_front = ((min_front + max_front) / 2.0) * self.LED_SPACING
         centroid_back  = ((min_back  + max_back)  / 2.0) * self.LED_SPACING
         lateral_delta  = centroid_front - centroid_back
-        path = math.degrees(math.atan2(lateral_delta, self.SENSOR_SPACING))
+        path_deg = math.degrees(math.atan2(lateral_delta, self.SENSOR_SPACING))
 
         # Calculate Smash Factor (from RepliShot shotprocessing.cpp:232)
         if max_back == 0: smash_factor = 0.5
@@ -86,7 +98,8 @@ class ShotProcessor:
         return {
             "speed": round(swing_speed, 1),
             "face_angle": round(face_angle, 1),
-            "path": round(path, 1),
+            "path": path,
+            "path_deg": round(path_deg, 1),
             "contact": face_contact, # Heel/Toe offset
             "smash_factor": smash_factor,
             "raw_min_back": min_back,

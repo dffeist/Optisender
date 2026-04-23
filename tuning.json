@@ -1,24 +1,20 @@
 {
-    "Global": {
-        "BallSpeed": 1.0,
-        "MaxHLA": 7.0,
-        "SensorSpacing": 28500.0,
-        "LedSpacing": 11.5
-    },
+    "SpeedCalibration": 1.10,
+
     "Driver": { "BallSpeed": 1.48, "VlaLow": 10.0, "VlaHigh": 14.0, "BSLow": 2000, "BSHigh": 2800},
-    "3W": { "BallSpeed": 1.45, "VlaLow": 12.0, "VlaHigh": 15.0, "BSLow": 2500, "BSHigh": 3500 },
-    "5W": { "BallSpeed": 1.42, "VlaLow": 13.0, "VlaHigh": 16.0, "BSLow": 3000, "BSHigh": 4000 },
-    "5H": { "BallSpeed": 1.40, "VlaLow": 14.0, "VlaHigh": 18.0, "BSLow": 3500, "BSHigh": 4500 },
-    "3I": { "BallSpeed": 1.39, "VlaLow": 14.5, "VlaHigh": 18.5, "BSLow": 3700, "BSHigh": 4700 },
-    "4I": { "BallSpeed": 1.38, "VlaLow": 15.0, "VlaHigh": 19.0, "BSLow": 4200, "BSHigh": 5200 },
-    "5I": { "BallSpeed": 1.38, "VlaLow": 16.0, "VlaHigh": 20.0, "BSLow": 5000, "BSHigh": 6000 },
-    "6I": { "BallSpeed": 1.36, "VlaLow": 17.0, "VlaHigh": 21.0, "BSLow": 5500, "BSHigh": 6500 },
-    "7I": { "BallSpeed": 1.33, "VlaLow": 18.0, "VlaHigh": 22.0, "BSLow": 6000, "BSHigh": 7500 },
-    "8I": { "BallSpeed": 1.30, "VlaLow": 20.0, "VlaHigh": 24.0, "BSLow": 7000, "BSHigh": 8500 },
-    "9I": { "BallSpeed": 1.28, "VlaLow": 22.0, "VlaHigh": 26.0, "BSLow": 7500, "BSHigh": 9000 },
-    "PW": { "BallSpeed": 1.25, "VlaLow": 24.0, "VlaHigh": 28.0, "BSLow": 8000, "BSHigh": 9500 },
-    "GW": { "BallSpeed": 1.23, "VlaLow": 26.0, "VlaHigh": 30.0, "BSLow": 8500, "BSHigh": 10000 },
-    "SW": { "BallSpeed": 1.20, "VlaLow": 28.0, "VlaHigh": 32.0, "BSLow": 9000, "BSHigh": 10500 },
-    "LW": { "BallSpeed": 1.18, "VlaLow": 30.0, "VlaHigh": 35.0, "BSLow": 9500, "BSHigh": 11000 },
-    "Putter": { "BallSpeed": 1.0, "VlaLow": 0.0, "VlaHigh": 0.0, "BSLow": 0, "BSHigh": 0 }
+    "3W":     { "BallSpeed": 1.45, "VlaLow": 12.0, "VlaHigh": 15.0, "BSLow": 2500, "BSHigh": 3500 },
+    "5W":     { "BallSpeed": 1.42, "VlaLow": 13.0, "VlaHigh": 16.0, "BSLow": 3000, "BSHigh": 4000 },
+    "5H":     { "BallSpeed": 1.40, "VlaLow": 14.0, "VlaHigh": 18.0, "BSLow": 3500, "BSHigh": 4500 },
+    "3I":     { "BallSpeed": 1.39, "VlaLow": 14.5, "VlaHigh": 18.5, "BSLow": 3700, "BSHigh": 4700 },
+    "4I":     { "BallSpeed": 1.38, "VlaLow": 15.0, "VlaHigh": 19.0, "BSLow": 4200, "BSHigh": 5200 },
+    "5I":     { "BallSpeed": 1.38, "VlaLow": 16.0, "VlaHigh": 20.0, "BSLow": 5000, "BSHigh": 6000 },
+    "6I":     { "BallSpeed": 1.36, "VlaLow": 17.0, "VlaHigh": 21.0, "BSLow": 5500, "BSHigh": 6500 },
+    "7I":     { "BallSpeed": 1.33, "VlaLow": 18.0, "VlaHigh": 22.0, "BSLow": 6000, "BSHigh": 7500 },
+    "8I":     { "BallSpeed": 1.30, "VlaLow": 20.0, "VlaHigh": 24.0, "BSLow": 7000, "BSHigh": 8500 },
+    "9I":     { "BallSpeed": 1.28, "VlaLow": 22.0, "VlaHigh": 26.0, "BSLow": 7500, "BSHigh": 9000 },
+    "PW":     { "BallSpeed": 1.25, "VlaLow": 24.0, "VlaHigh": 28.0, "BSLow": 8000, "BSHigh": 9500 },
+    "GW":     { "BallSpeed": 1.23, "VlaLow": 26.0, "VlaHigh": 30.0, "BSLow": 8500, "BSHigh": 10000 },
+    "SW":     { "BallSpeed": 1.20, "VlaLow": 28.0, "VlaHigh": 32.0, "BSLow": 9000, "BSHigh": 10500 },
+    "LW":     { "BallSpeed": 1.18, "VlaLow": 30.0, "VlaHigh": 35.0, "BSLow": 9500, "BSHigh": 11000 },
+    "Putter": { "BallSpeed": 1.0,  "VlaLow": 0.0,  "VlaHigh": 0.0,  "BSLow": 0,    "BSHigh": 0 }
 }

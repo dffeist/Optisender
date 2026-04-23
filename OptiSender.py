@@ -41,6 +41,10 @@ def main():
     api_buffer = ""
     last_heartbeat_time = time.time()
     last_connection_attempt = 0
+    last_keep_alive_time = time.time()
+    last_reconnect_attempt = 0
+    KEEP_ALIVE_INTERVAL = 30.0   # seconds between keep-alive pings
+    RECONNECT_INTERVAL  = 10.0   # seconds between reconnect attempts
     
     # Simulation Input State
     sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False, "toggle_handed": False, "toggle_pin": False}
@@ -50,7 +54,7 @@ def main():
     print("Handedness: Right-Handed (press 'H' to toggle)")
 
     overlay = OverlayDisplay()
-    overlay.push_state({"using_ball": using_ball, "left_handed": left_handed})
+    overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "club": user_club, "source": "Ready", "hand_label": "LH" if left_handed else "RH", "simulation_mode": simulation_mode})
 
     def on_press(key):
         try:
@@ -149,6 +153,7 @@ def main():
                 new_idx = (current_idx + direction) % len(CLUBS)
                 user_club = CLUBS[new_idx]
                 print(f"*** MANUAL CLUB SELECT: {user_club} ***")
+                overlay.push_state({"club": user_club, "source": "Manual", "hand_label": "LH" if left_handed else "RH"})
 
             # Attempt API reconnection if offline
             try_api_connect()
@@ -193,6 +198,7 @@ def main():
                                             if new_club != user_club:
                                                 user_club = new_club
                                                 print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) ***")
+                                                overlay.push_state({"club": user_club, "source": "API", "hand_label": "LH" if left_handed else "RH"})
 
                                     elif msg_json.get("type") == "result":
                                         res_data = msg_json.get("data", {}).get("result", {})
@@ -209,6 +215,33 @@ def main():
                     if api_socket: 
                         api_socket.close()
                         api_socket = None
+
+            now = time.time()
+
+            # Keep-alive ping to prevent device sleep
+            if not simulation_mode and reader.is_connected:
+                if now - last_keep_alive_time > KEEP_ALIVE_INTERVAL:
+                    reader.keep_alive()
+                    last_keep_alive_time = now
+
+            # Reconnect logic: if device disconnected, fall to sim and retry
+            if not simulation_mode and not reader.is_connected:
+                print("[DEVICE] OptiShot disconnected — switching to SIMULATION MODE.")
+                print("  S / ENTER: Trigger Simulated Swing while reconnecting...")
+                simulation_mode = True
+                last_reconnect_attempt = now
+                overlay.push_state({"simulation_mode": True})
+
+            if simulation_mode and not reader.is_connected:
+                if now - last_reconnect_attempt > RECONNECT_INTERVAL:
+                    last_reconnect_attempt = now
+                    print("[DEVICE] Attempting to reconnect to OptiShot...")
+                    if reader.reconnect():
+                        simulation_mode = False
+                        last_keep_alive_time = now
+                        print("[DEVICE] OptiShot reconnected — resuming hardware input.")
+                        print("\nReady for a swing. Waiting for data...")
+                        overlay.push_state({"simulation_mode": False})
 
             # Get Swing Data
             data = None
@@ -229,10 +262,10 @@ def main():
                 metrics = processor.process_raw_buffer(data, using_ball=using_ball)
                 
                 if metrics:
-                    ball = physics.calculate_ball_flight(metrics, user_club)
+                    ball = physics.calculate_ball_flight(metrics, user_club, left_handed=left_handed)
 
-                    # Path in degrees: positive = inside/out (RH), negative = outside/in (RH)
-                    path_val = metrics['path']
+                    # path_deg for display; raw path integer stays in metrics for physics
+                    path_val = metrics['path_deg']
                     eff_path = -path_val if left_handed else path_val
 
                     # Derive face angle label
@@ -337,12 +370,13 @@ def main():
                 if not simulation_mode:
                     try:
                         reader.set_led_red()
-                        time.sleep(2.5) # Wait for simulation to be ready
+                        time.sleep(2.5)
                         reader.set_led_green()
+                        last_keep_alive_time = time.time()
                         print("\nReady for a swing. Waiting for data...")
                     except Exception:
-                        print("Device communication lost.")
-                        break
+                        print("[DEVICE] Communication lost during LED feedback.")
+                        reader.is_connected = False
                 else:
                     time.sleep(1)
 

@@ -78,6 +78,21 @@ class OptiReader:
             self.is_connected = False
             return None
 
+    def keep_alive(self):
+        """Sends a sensors-on command to prevent the device from sleeping."""
+        self._send_command(self.CMD_SENSORS_ON)
+
+    def reconnect(self):
+        """Closes any stale handle then attempts a fresh connection."""
+        try:
+            if self.device:
+                self.device.close()
+        except Exception:
+            pass
+        self.device = None
+        self.is_connected = False
+        return self.connect()
+
     def disconnect(self):
         """
         Turns off sensors/LED and closes the device handle.

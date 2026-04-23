@@ -35,9 +35,9 @@ class OverlayDisplay:
     def _run(self):
         self._root = tk.Tk()
         self._root.title("OptiSender")
+        self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
-        self._root.resizable(False, False)
-        self._root.geometry(f"{WIDTH}x224+15+25")
+        self._root.geometry(f"{WIDTH}x250+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
         self._drag_x = 0
@@ -53,20 +53,27 @@ class OverlayDisplay:
         # ── Title / drag bar ─────────────────────────────────────────
         title_bar = tk.Frame(root, bg="#111111", cursor="fleur")
         title_bar.pack(fill="x")
-        tk.Label(title_bar, text="⛳ OptiSender", bg="#111111", fg=ACCENT,
-                 font=FONT_HDR, pady=4).pack(side="left", padx=6)
+        title_lbl = tk.Label(title_bar, text="⛳ OptiSender", bg="#111111", fg=ACCENT,
+                             font=FONT_HDR, pady=4, cursor="fleur")
+        title_lbl.pack(side="left", padx=6)
         self._pin_btn = tk.Button(
             title_bar, text="📌", bg="#111111", fg=ACCENT,
             font=("Consolas", 9), relief="flat", cursor="hand2",
             command=self._toggle_pin
         )
         self._pin_btn.pack(side="right", padx=4)
-        title_bar.bind("<ButtonPress-1>", self._drag_start)
-        title_bar.bind("<B1-Motion>",     self._drag_motion)
+        for widget in (title_bar, title_lbl):
+            widget.bind("<ButtonPress-1>", self._drag_start)
+            widget.bind("<B1-Motion>",     self._drag_motion)
+
+        # ── Connection status ─────────────────────────────────────────
+        self._conn_lbl = tk.Label(root, text="● Connected", bg=BG,
+                                  fg=ON_COLOR, font=FONT_HDR, anchor="center")
+        self._conn_lbl.pack(fill="x", padx=5, pady=(4, 1))
 
         # ── Status row (Ball / Hand) ──────────────────────────────────
         status = tk.Frame(root, bg=BG)
-        status.pack(fill="x", padx=5, pady=(4, 1))
+        status.pack(fill="x", padx=5, pady=(2, 1))
         tk.Label(status, text="B:", bg=BG, fg=DIM,
                  font=FONT_LBL).pack(side="left")
         self._ball_lbl = tk.Label(status, text="ON", bg=BG,
@@ -131,6 +138,13 @@ class OverlayDisplay:
         if s.get("_toggle_pin"):
             self._toggle_pin()
             return
+
+        if "simulation_mode" in s:
+            sim = s["simulation_mode"]
+            self._conn_lbl.config(
+                text="◌ Simulation" if sim else "● Connected",
+                fg=DIM if sim else ON_COLOR
+            )
 
         using_ball = s.get("using_ball", True)
         self._ball_lbl.config(
