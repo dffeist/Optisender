@@ -6,8 +6,8 @@ class ShotProcessor:
     """
     def __init__(self):
         # Constants 
-        self.SENSOR_SPACING = 0.05715 # Meters
-        self.LED_SPACING = 0.0127     # Meters (0.5 inches)
+        self.SENSOR_SPACING = 185     # Hardware tick units (matches RepliShot SENSORSPACING)
+        self.LED_SPACING = 15         # Hardware tick units (matches RepliShot LEDSPACING)
         self.MPH_CONV = 2236.94       # Conversion to MPH
 
     def process_raw_buffer(self, data, using_ball=True):

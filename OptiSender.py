@@ -195,18 +195,62 @@ def main():
                 if metrics:
                     ball = physics.calculate_ball_flight(metrics, user_club)
 
-                    
-                    print("\n" + "="*30)
-                    print(f" CLUB INPUT: {user_club}")
-                    print("-" * 30)
-                    print(f" CLUB DATA ({'SIMULATED' if simulation_mode else 'OptiShot'}):")
-                    print(f"  Speed:   {metrics['speed']:.1f} mph")
-                    print(f"  Face:    {metrics['face_angle']:.1f} deg")
-                    print("-" * 30)
-                    print(f" BALL FLIGHT (Calculated):")
-                    print(f"  Speed:   {ball.ball_speed:.1f} mph")
-                    print(f"  Spin:    {ball.total_spin:.0f} rpm")
-                    print("="*30 + "\n")
+                    # Derive path label
+                    path_val = metrics['path']
+                    if abs(path_val) > 3:
+                        path_label = "Very Inside/Out" if path_val > 0 else "Very Outside/In"
+                    elif abs(path_val) > 1:
+                        path_label = "Inside/Out" if path_val > 0 else "Outside/In"
+                    else:
+                        path_label = "On Plane"
+
+                    # Derive face angle label
+                    face = metrics['face_angle']
+                    if face > 0.5:
+                        face_label = f"Closed {face:.1f}°"
+                    elif face < -0.5:
+                        face_label = f"Open {abs(face):.1f}°"
+                    else:
+                        face_label = f"Square {abs(face):.1f}°"
+
+                    # Derive face contact label
+                    min_b = metrics['raw_min_back']
+                    max_b = metrics['raw_max_back']
+                    if max_b == 0:   contact_label = "Missed"
+                    elif max_b <= 2: contact_label = "Extreme Toe"
+                    elif max_b == 3: contact_label = "Toe"
+                    elif min_b >= 5: contact_label = "Far Heel"
+                    elif min_b == 4: contact_label = "Heel"
+                    else:            contact_label = "Center"
+
+                    # Derive shot shape from spin axis
+                    axis = ball.spin_axis
+                    if axis > 10:    shape_label = "Slice"
+                    elif axis > 3:   shape_label = "Fade"
+                    elif axis > -3:  shape_label = "Straight"
+                    elif axis > -10: shape_label = "Draw"
+                    else:            shape_label = "Hook"
+
+                    source = 'SIMULATED' if simulation_mode else 'OptiShot'
+                    W = 38
+                    print("\n" + "=" * W)
+                    print(f"  CLUB: {user_club}  [{source}]")
+                    print("=" * W)
+                    print(f"  {'CLUB METRICS':}")
+                    print(f"    Club Speed  : {metrics['speed']:.1f} mph")
+                    print(f"    Face Angle  : {face_label}")
+                    print(f"    Swing Path  : {path_val:+d}  ({path_label})")
+                    print(f"    Face Contact: {contact_label}")
+                    print(f"    Smash Factor: {metrics['smash_factor']:.2f}")
+                    print("-" * W)
+                    print(f"  {'BALL FLIGHT':}")
+                    print(f"    Ball Speed  : {ball.ball_speed:.1f} mph")
+                    print(f"    Launch (V)  : {ball.launch_angle:.1f}°")
+                    print(f"    Launch (H)  : {ball.launch_direction:+.1f}°")
+                    print(f"    Total Spin  : {ball.total_spin:.0f} rpm")
+                    print(f"    Spin Axis   : {ball.spin_axis:+.1f}°")
+                    print(f"    Shot Shape  : {shape_label}")
+                    print("=" * W + "\n")
                     
                     if api_socket:
                         payload = {
