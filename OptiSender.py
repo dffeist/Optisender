@@ -42,12 +42,16 @@ def main():
     last_connection_attempt = 0
     
     # Simulation Input State
-    sim_input = {"trigger": False, "club_shift": 0}
+    sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False}
+    using_ball = True
+    print("Ball Mode: ON (press 'B' to toggle)")
 
     def on_press(key):
         try:
             if hasattr(key, 'char') and key.char.lower() == 's':
                 sim_input["trigger"] = True
+            elif hasattr(key, 'char') and key.char.lower() == 'b':
+                sim_input["toggle_ball"] = True
         except AttributeError:
             pass
         if key == keyboard.Key.enter:
@@ -91,6 +95,7 @@ def main():
     if keyboard:
         print("\n[INPUT] Keyboard control active.")
         print("  UP/DOWN: Cycle Manual Club Selection")
+        print("  B: Toggle Ball On/Off")
         if simulation_mode:
             print("  S / ENTER: Trigger Simulated Swing")
         listener = keyboard.Listener(on_press=on_press)
@@ -100,6 +105,12 @@ def main():
 
     try:
         while True:
+            # Check for ball toggle
+            if sim_input["toggle_ball"]:
+                sim_input["toggle_ball"] = False
+                using_ball = not using_ball
+                print(f"*** BALL MODE: {'ON' if using_ball else 'OFF'} ***")
+
             # Check for manual club change
             if sim_input["club_shift"] != 0:
                 direction = sim_input["club_shift"]
@@ -190,7 +201,7 @@ def main():
                     continue
 
                 print(f"--- Valid Swing Detected ---")
-                metrics = processor.process_raw_buffer(data)
+                metrics = processor.process_raw_buffer(data, using_ball=using_ball)
                 
                 if metrics:
                     ball = physics.calculate_ball_flight(metrics, user_club)
