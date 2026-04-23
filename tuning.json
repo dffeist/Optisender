@@ -9,6 +9,7 @@
     "3W": { "BallSpeed": 1.45, "VlaLow": 12.0, "VlaHigh": 15.0, "BSLow": 2500, "BSHigh": 3500 },
     "5W": { "BallSpeed": 1.42, "VlaLow": 13.0, "VlaHigh": 16.0, "BSLow": 3000, "BSHigh": 4000 },
     "5H": { "BallSpeed": 1.40, "VlaLow": 14.0, "VlaHigh": 18.0, "BSLow": 3500, "BSHigh": 4500 },
+    "3I": { "BallSpeed": 1.39, "VlaLow": 14.5, "VlaHigh": 18.5, "BSLow": 3700, "BSHigh": 4700 },
     "4I": { "BallSpeed": 1.38, "VlaLow": 15.0, "VlaHigh": 19.0, "BSLow": 4200, "BSHigh": 5200 },
     "5I": { "BallSpeed": 1.38, "VlaLow": 16.0, "VlaHigh": 20.0, "BSLow": 5000, "BSHigh": 6000 },
     "6I": { "BallSpeed": 1.36, "VlaLow": 17.0, "VlaHigh": 21.0, "BSLow": 5500, "BSHigh": 6500 },

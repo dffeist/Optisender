@@ -7,7 +7,7 @@ class OptiReader:
     """
     VID = 0x0547
     PID = 0x3294
-    
+
     # Command Constants
     CMD_SENSORS_ON  = 0x50
     CMD_LED_RED     = 0x51
@@ -20,19 +20,18 @@ class OptiReader:
 
     def connect(self):
         """
-        Opens the HID device and performs the initialization sequence 
+        Opens the HID device and performs the initialization sequence
         found in opti_init (usbcode.cpp).
         """
         try:
             self.device = hid.device()
             self.device.open(self.VID, self.PID)
             self.device.set_nonblocking(1)
-            
-            # Initialization sequence
+
             self._send_command(self.CMD_SENSORS_ON)
             time.sleep(0.1)
             self.set_led_green()
-            
+
             self.is_connected = True
             print(f"OptiShot connected: {self.device.get_product_string()}")
             return True
@@ -49,8 +48,6 @@ class OptiReader:
         """
         if not self.device:
             return
-            
-        # Construct 61-byte report [0x00, CMD, 0x00, ... 0x00]
         report = [0x00, cmd_byte] + [0x00] * 59
         try:
             self.device.write(report)
@@ -66,15 +63,14 @@ class OptiReader:
         """Turns the hardware LED green (ready for swing)."""
         self._send_command(self.CMD_LED_GREEN)
 
-    def read_raw(self, timeout_ms=0):
+    def read_raw(self):
         """
         Reads a 60-byte raw data packet from the sensors.
+        Returns a list[int] on success, None if no data available.
         """
         if not self.device:
             return None
-            
         try:
-            # read(60) returns a list of bytes
             data = self.device.read(60)
             return data if data else None
         except Exception as e:
@@ -91,7 +87,7 @@ class OptiReader:
             try:
                 self._send_command(self.CMD_SENSORS_OFF)
                 self.device.close()
-            except:
+            except Exception:
                 pass
             finally:
                 self.device = None

@@ -270,41 +270,27 @@ The resulting packet is structurally identical to hardware output and passes thr
 ## Technical Gotchas
 
 ### 1. `hidapi` wheel is Python-version and arch locked
-The bundled `hidapi-0.15.0-cp315-cp315-win_amd64.whl` only installs on CPython 3.15 / Windows x64. If you upgrade Python or move to a different OS you must build or source a matching wheel. The `hid` module import will fail silently at runtime if the ABI doesn't match.
+The bundled `hidapi-0.15.0-cp315-cp315-win_amd64.whl` only installs on CPython 3.15 / Windows x64. This is only required in an air gapped (no internet) environment. Pip install pyusb to avoid this issue.
 
-### 2. Windows requires a driver swap
-Windows ships a vendor HID driver for the OptiShot that conflicts with `hidapi`'s direct access. Use **Zadig** to install WinUSB for VID `0x0547` / PID `0x3294`. This change is system-wide and persistent — it will break the official OptiShot software. You must swap back if you want to run the OEM software again.
 
-### 3. Write report is 61 bytes, not 60
-The device reads 60-byte packets but the write path requires a **61-byte** report prefixed with Report ID `0x00`. Sending 60 bytes causes a silent failure or HID error depending on the OS. The `_send_command` method in `opti_reader.py` constructs this correctly.
+### 2. Windows USB conflict
+A conflict may happen if you run OptiSender and the official OptiShot software at the same time. Two applications cannot hold exclusive access to the same HID device simultaneously. Whichever opens it first wins; the other gets an access denied error.
 
-### 4. Non-blocking reads need a tight poll loop
+Practical impact on your program
+Scenario	                                Result
+OptiSender running, OEM software closed	    Works fine
+OEM software running, OptiSender starts	    HID Connection Error → falls into simulation mode
+Both started simultaneously	                Race condition — first one to open wins
+
+### 3. Non-blocking reads need a tight poll loop
 `device.set_nonblocking(1)` means `device.read(60)` returns `[]` immediately when no data is available. The main loop sleeps only 10 ms between polls (`time.sleep(0.01)`). Do not increase this interval significantly or you risk missing short-duration swing packets.
 
-### 5. Face angle weighted average is back-sensor dominant
-The face angle formula weights back sensors 2× relative to front sensors:
-```
-face_angle = (front_avg + 2 × back_avg) / 3
-```
-This mirrors RepliShot `shotprocessing.cpp`. Adjusting the weighting will shift all face angle output — tune `tuning.json` per-club rather than changing this formula.
-
-### 6. Duplicate packet guard is byte-exact
+### 4. Duplicate packet guard is byte-exact
 `OptiFilter.is_duplicate` does a full 60-byte equality check. The OptiShot hardware can re-deliver the same packet on subsequent reads before the next swing. If you see shots being silently dropped, verify the filter isn't matching near-identical but distinct packets (this can happen at very low swing speeds where sensor patterns repeat).
 
-### 7. API connection is fire-and-forget with 5-second retry
+### 5. API connection is fire-and-forget with 5-second retry
 If OpenGolfSim is not running when OptiSender starts, the program falls back to `simulation_mode=False` hardware mode but simply has no API destination. Shots are processed and printed to console but not transmitted. The retry loop checks every 5 seconds — start OpenGolfSim at any point and the next retry window will connect.
 
-### 8. Club ID mapping from OpenGolfSim API
-The API sends club IDs that don't match OptiSender's internal club list directly. Key mappings in `OptiSender.py`:
-
-| API `id` | Internal club |
-|---|---|
-| `DR`, `1W` | `Driver` |
-| `PT` | `Putter` |
-| `AW`, `UW` | `GW` |
-| All others | passed through verbatim |
-
----
 
 ## File Reference
 
