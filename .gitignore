@@ -4,11 +4,13 @@ __pycache__/
 .pytest_cache/
 
 # Environments
+*.spec
 .env
 .venv
 env/
 venv/
 *.build/
+build/
 *.dist/
 dist/
 
