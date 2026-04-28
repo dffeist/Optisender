@@ -54,26 +54,37 @@ def main():
     print("Handedness: Right-Handed (press 'H' to toggle)")
 
     overlay = OverlayDisplay()
-    overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "club": user_club, "source": "Ready", "hand_label": "LH" if left_handed else "RH", "simulation_mode": simulation_mode})
+
+    ctrl_held = {"value": False}
 
     def on_press(key):
+        if key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+            ctrl_held["value"] = True
+            return
+        if not ctrl_held["value"]:
+            return
         try:
-            if hasattr(key, 'char') and key.char.lower() == 's':
+            ch = key.char.lower() if hasattr(key, 'char') else None
+            if ch == 's':
                 sim_input["trigger"] = True
-            elif hasattr(key, 'char') and key.char.lower() == 'b':
+            elif ch == 'b':
                 sim_input["toggle_ball"] = True
-            elif hasattr(key, 'char') and key.char.lower() == 'h':
+            elif ch == 'h':
                 sim_input["toggle_handed"] = True
-            elif hasattr(key, 'char') and key.char.lower() == 'd':
+            elif ch == 'd':
                 sim_input["toggle_pin"] = True
         except AttributeError:
             pass
-        if key == keyboard.Key.enter:
+        if key == keyboard.Key.space:
             sim_input["trigger"] = True
         if key == keyboard.Key.up:
             sim_input["club_shift"] = 1
         elif key == keyboard.Key.down:
             sim_input["club_shift"] = -1
+
+    def on_release(key):
+        if key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+            ctrl_held["value"] = False
 
     listener = None
 
@@ -85,6 +96,8 @@ def main():
         print(f"Connection failed: {ex}")
         print("Device not found or not accessible. Switching to SIMULATION MODE.")
         simulation_mode = True
+
+    overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "club": user_club, "source": "Ready", "hand_label": "LH" if left_handed else "RH", "simulation_mode": simulation_mode})
 
     def try_api_connect():
         nonlocal api_socket, last_connection_attempt
@@ -107,14 +120,14 @@ def main():
 
     # Enable keyboard listener
     if keyboard:
-        print("\n[INPUT] Keyboard control active.")
-        print("  UP/DOWN: Cycle Manual Club Selection")
-        print("  B: Toggle Ball On/Off")
-        print("  H: Toggle Left/Right Handed")
-        print("  D: Toggle Overlay Always-On-Top")
+        print("\n[INPUT] Keyboard control active (hold Ctrl).")
+        print("  Ctrl+Up / Ctrl+Down : Cycle Club Selection")
+        print("  Ctrl+B              : Toggle Ball On/Off")
+        print("  Ctrl+H              : Toggle Left/Right Handed")
+        print("  Ctrl+D              : Toggle Overlay Always-On-Top")
         if simulation_mode:
-            print("  S / ENTER: Trigger Simulated Swing")
-        listener = keyboard.Listener(on_press=on_press)
+            print("  Ctrl+Space / Ctrl+S : Trigger Simulated Swing")
+        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
         listener.start()
     else:
         print("\n[INPUT] 'pynput' not found. Manual controls disabled.")

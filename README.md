@@ -10,7 +10,7 @@ Logic and packet structure were ported from the [RepliShot](https://github.com/R
 
 1. [Requirements](#requirements)
 2. [Installation](#installation)
-3. [Running](#running)
+3. [Setup & Running](#setup--running)
 4. [Data Flow Architecture](#data-flow-architecture)
 5. [HID Hardware Reference](#hid-hardware-reference)
 6. [Packet Format (60-byte HID Report)](#packet-format-60-byte-hid-report)
@@ -49,23 +49,50 @@ pip install pynput
 
 ---
 
-## Running
+## Setup & Running
+
+### 1. Start order
+
+OptiSender is designed to run **alongside** OpenGolfSim (or another golf sim UI) at the same time.  
+Recommended start order:
+
+1. Launch OpenGolfSim (or your sim front-end) first.
+2. Then launch OptiSender — it will connect to the running API automatically.
+
+If OpenGolfSim is not yet running when OptiSender starts, that is fine. OptiSender retries the API connection every 5 seconds; start OpenGolfSim at any point and the next retry window will connect.
+
+### 2. Run OptiSender
 
 ```bash
 python OptiSender.py
 ```
 
-On startup:
-- If the OptiShot 2 is detected, hardware mode activates.
-- If the device is not found, **simulation mode** activates automatically.
-- The program attempts to connect to the OpenGolfSim API at `127.0.0.1:3111` and retries every 5 seconds if the connection fails.
+### 3. Startup behaviour
 
-**Keyboard controls (requires `pynput`):**
-
-| Key | Action |
+| Condition | Result |
 |---|---|
-| `↑` / `↓` | Cycle club selection |
-| `S` or `Enter` | Trigger simulated swing (simulation mode only) |
+| OptiShot 2 USB detected | **Hardware mode** — live swing data from the mat |
+| OptiShot 2 not found | **Simulation mode** — synthetic packets for testing |
+| OpenGolfSim not running | Shots processed locally and printed to console; transmitted once API connects |
+| OpenGolfSim running | Shot telemetry forwarded in real time |
+
+### 4. Keyboard controls
+
+All shortcuts require holding **Ctrl** first. This avoids conflicts with the sim front-end and OS-level shortcuts.
+
+| Shortcut | Available in | Action |
+|---|---|---|
+| `Ctrl + Space` or `Ctrl + S` | Simulation mode only | Trigger a simulated swing |
+| `Ctrl + ↑` / `Ctrl + ↓` | Always | Cycle club selection up / down |
+| `Ctrl + B` | Always | Toggle ball detection on / off |
+| `Ctrl + H` | Always | Toggle Left / Right handed mode |
+| `Ctrl + D` | Always | Toggle overlay window always-on-top |
+
+> **Note:** Keyboard controls require `pynput` (`pip install pynput`). If pynput is not installed the program still runs — controls are simply disabled.
+
+#### Why Ctrl-modified shortcuts?
+
+OptiSender runs alongside another program that also reads keyboard input. Plain key bindings (single letters, arrow keys) risk being captured by whichever window has focus. Ctrl-modified shortcuts are almost never claimed by golf sim UIs and avoid common OS intercepts (`Alt+F4`, `Alt+Enter`, `Alt+Tab`). `Ctrl+C` and `Ctrl+Z` are reserved by the OS and intentionally not used.
 
 ---
 

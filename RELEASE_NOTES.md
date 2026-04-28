@@ -1,3 +1,37 @@
+# OptiSender v1.0.0a2 — Release Notes
+
+## What's New since v1.0.0a1
+
+### Overlay Display Window
+A new floating, movable heads-up display shows real-time club metrics after each shot without needing to watch the console.
+
+- Displays club name, ball detected (yes/no), and handedness (Left/Right)
+- Shows shot metrics: club speed, ball speed, launch angle, spin, HLA, and VLA
+- Window is draggable and stays on top of other applications
+- Connection status indicator shows whether the OptiShot device is live or in simulation mode
+
+### Ball Detection Toggle
+- Press **`b`** to toggle ball detection on/off at runtime — useful for testing or forcing simulation shots without repositioning a ball
+
+### Bug Fixes
+- **Spin axis bug fixed** — spin axis sign was inverted, causing draw/fade spin to be reported backwards to the API
+- **Connection status** now correctly reflects live USB vs. simulation mode in the overlay
+
+---
+
+## Files Changed since v1.0.0a1
+
+| File | Change |
+|---|---|
+| `overlay_display.py` | New — floating overlay window with club metrics and connection status |
+| `OptiSender.py` | Ball toggle keybind, overlay integration, connection status tracking |
+| `ballphysics.py` | Spin axis sign fix |
+| `shot_processor.py` | Spin axis correction, overlay data passing |
+| `opti_reader.py` | Connection status reporting |
+| `tuning.json` | Tuning value updates |
+
+---
+
 # OptiSender v1.0.0a1 — Release Notes
 
 ## What's New
