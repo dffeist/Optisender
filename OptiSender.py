@@ -76,10 +76,11 @@ def main():
                 sim_input["toggle_pin"] = True
         if key == keyboard.Key.space:
             sim_input["trigger"] = True
-        if key == keyboard.Key.up:
-            sim_input["club_shift"] = 1
-        elif key == keyboard.Key.down:
-            sim_input["club_shift"] = -1
+        # Club cycling via keyboard disabled — club selection comes from OGS API
+        # if key == keyboard.Key.up:
+        #     sim_input["club_shift"] = 1
+        # elif key == keyboard.Key.down:
+        #     sim_input["club_shift"] = -1
 
     def on_release(key):
         if key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
@@ -120,7 +121,8 @@ def main():
     # Enable keyboard listener
     if keyboard:
         print("\n[INPUT] Keyboard control active (hold Ctrl).")
-        print("  Ctrl+Up / Ctrl+Down : Cycle Club Selection")
+        # Club cycling via keyboard disabled — club selection comes from OGS API
+        # print("  Ctrl+Up / Ctrl+Down : Cycle Club Selection")
         print("  Ctrl+B              : Toggle Ball On/Off")
         print("  Ctrl+H              : Toggle Left/Right Handed")
         print("  Ctrl+D              : Toggle Overlay Always-On-Top")
@@ -152,20 +154,18 @@ def main():
                 sim_input["toggle_pin"] = False
                 overlay.push_state({"_toggle_pin": True})
 
-            # Check for manual club change
-            if sim_input["club_shift"] != 0:
-                direction = sim_input["club_shift"]
-                sim_input["club_shift"] = 0 
-                
-                try:
-                    current_idx = CLUBS.index(user_club)
-                except ValueError:
-                    current_idx = 0 
-                
-                new_idx = (current_idx + direction) % len(CLUBS)
-                user_club = CLUBS[new_idx]
-                print(f"*** MANUAL CLUB SELECT: {user_club} ***")
-                overlay.push_state({"club": user_club, "source": "Manual", "hand_label": "LH" if left_handed else "RH"})
+            # Manual club change disabled — club selection comes from OGS API
+            # if sim_input["club_shift"] != 0:
+            #     direction = sim_input["club_shift"]
+            #     sim_input["club_shift"] = 0
+            #     try:
+            #         current_idx = CLUBS.index(user_club)
+            #     except ValueError:
+            #         current_idx = 0
+            #     new_idx = (current_idx + direction) % len(CLUBS)
+            #     user_club = CLUBS[new_idx]
+            #     print(f"*** MANUAL CLUB SELECT: {user_club} ***")
+            #     overlay.push_state({"club": user_club, "source": "Manual", "hand_label": "LH" if left_handed else "RH"})
 
             # Attempt API reconnection if offline
             try_api_connect()
