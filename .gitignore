@@ -14,6 +14,9 @@ build/
 *.dist/
 dist/
 
+# Build script (local only)
+build.bat
+
 # IDEs
 .vscode/
 .idea/

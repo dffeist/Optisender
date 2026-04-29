@@ -83,10 +83,11 @@ All shortcuts require holding **Ctrl** first. This avoids conflicts with the sim
 | Shortcut | Available in | Action |
 |---|---|---|
 | `Ctrl + Space` or `Ctrl + S` | Simulation mode only | Trigger a simulated swing |
-| `Ctrl + ↑` / `Ctrl + ↓` | Always | Cycle club selection up / down |
 | `Ctrl + B` | Always | Toggle ball detection on / off |
 | `Ctrl + H` | Always | Toggle Left / Right handed mode |
 | `Ctrl + D` | Always | Toggle overlay window always-on-top |
+
+> **Club selection** is driven automatically by the OpenGolfSim API — when you change clubs in-game the active club updates in OptiSender. Manual keyboard cycling has been removed.
 
 > **Note:** Keyboard controls require `pynput` (`pip install pynput`). If pynput is not installed the program still runs — controls are simply disabled.
 
@@ -178,9 +179,10 @@ OptiSender runs alongside another program that also reads keyboard input. Plain 
 │       "spinAxis": <deg>                                 │
 │    }}                                                   │
 │                                                         │
-│  Inbound (handled):                                     │
-│    type=player  → updates active club from API          │
-│    type=result  → prints carry/total distances          │
+│  Inbound events (server-pushed, no polling):            │
+│    type=player       → updates active club from API     │
+│    type=shot result  → carry/total/roll/height/lateral  │
+│    type=device status → device ready/busy state         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -285,7 +287,7 @@ Activated automatically when no HID device is found, or can be forced by disconn
 
 `simulation.py → generate_simulated_shot(club_name)` synthesizes a valid 60-byte packet by:
 
-1. Picking a random club speed within realistic amateur–tour ranges.
+1. Picking a random club speed within mid-handicap amateur ranges (driver ~75–90 mph).
 2. Choosing a random spin axis target (−7.5° to +7.5°).
 3. Back-solving the required face angle and LED skew to produce that axis.
 4. Encoding timing ticks and bitmasks into the packet byte layout.
@@ -323,11 +325,12 @@ If OpenGolfSim is not running when OptiSender starts, the program falls back to 
 
 | File | Role |
 |---|---|
-| [OptiSender.py](OptiSender.py) | Entry point; main loop, API socket management, club cycling |
+| [OptiSender.py](OptiSender.py) | Entry point; main loop, API socket management; club set by API |
 | [opti_reader.py](opti_reader.py) | HID device open/close, command writes, raw 60-byte reads |
 | [data_filters.py](data_filters.py) | Duplicate and validity filters before processing |
 | [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact, smash |
 | [ballphysics.py](ballphysics.py) | Ball-flight physics engine; reads `tuning.json` |
-| [simulation.py](simulation.py) | Synthetic packet generator; mirrors hardware packet layout |
+| [simulation.py](simulation.py) | Synthetic packet generator; mid-handicap amateur speed ranges |
 | [tuning.json](tuning.json) | Per-club smash factor, VLA range, spin range, global calibration |
-| [api_monitor.py](api_monitor.py) | Standalone API traffic monitor (debugging aid) |
+| [api_monitor.py](api_monitor.py) | Standalone API traffic monitor; event-driven, passive listener |
+| [build.bat](build.bat) | PyInstaller onedir build script for standalone Windows exe |

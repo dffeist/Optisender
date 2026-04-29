@@ -1,3 +1,46 @@
+# OptiSender v1.0.0a3 — Release Notes
+
+## What's New since v1.0.0a2
+
+### OGS API Updated to Event-Driven Model
+`api_monitor.py` has been refactored to match the updated OpenGolfSim API, which now pushes events server-side rather than requiring client polling.
+
+- Removed fake shot heartbeat — no more phantom shots sent every 5 seconds to stimulate a response
+- `select` timeout increased from 0.1 s to 30 s; the thread now sleeps until data arrives instead of spinning 10× per second
+- Structured display formatters for all three event types: `player` (club change), `shot result` (carry/total/roll/height/lateral), `device status`
+- Stale `status == 200` suppression filter removed — all received messages are now displayed
+- Connection logic extracted into a clean `connect()` helper
+
+### Club Selection Now Driven by OGS API
+Manual keyboard club cycling (Ctrl+↑ / Ctrl+↓) has been disabled. Club selection is now received exclusively through the OpenGolfSim API `player` event, keeping the in-game club and OptiSender in sync automatically.
+
+### Simulation Speed Ranges Adjusted for Mid-Handicap Amateur
+`CLUB_SPEED_RANGES` in `simulation.py` have been scaled down from tour/scratch levels to realistic mid-handicap amateur values (driver ~75–90 mph vs. the previous 93–115 mph). All clubs and putter updated proportionally.
+
+### PyInstaller Build Script
+`build.bat` added for building a standalone Windows executable using PyInstaller in `--onedir` (folder) mode.
+
+- UPX disabled (`--noupx`) — UPX-packed binaries are commonly flagged as malware by AV engines
+- Onedir output reduces AV heuristic triggers vs. single-file self-extracting bundles
+- Unused stdlib modules excluded to reduce binary footprint
+- `cd /d "%~dp0"` ensures the script works when double-clicked from Explorer on any drive
+- `pause` on both success and failure paths so the window stays open for output
+- `build.bat` added to `.gitignore`
+
+---
+
+## Files Changed since v1.0.0a2
+
+| File | Change |
+|---|---|
+| `api_monitor.py` | Full refactor — event-driven, no heartbeat, structured event display |
+| `OptiSender.py` | Manual club cycling (Ctrl+↑/↓) commented out; club from API only |
+| `simulation.py` | `CLUB_SPEED_RANGES` reduced to mid-handicap amateur values |
+| `build.bat` | New — PyInstaller onedir build script |
+| `.gitignore` | Added `build.bat` |
+
+---
+
 # OptiSender v1.0.0a2 — Release Notes
 
 ## What's New since v1.0.0a1
