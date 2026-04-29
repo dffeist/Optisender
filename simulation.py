@@ -49,10 +49,13 @@ def _pick_profile(shot_type=None):
     return name, SHOT_PROFILES[name]
 
 
-def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True):
+def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, speed_pct=100):
     """
     Build a 60-byte HID packet that shot_processor.py will decode into
     realistic metrics for the given club and shot profile.
+
+    speed_pct: 10–100 — scales target speed within the club's natural range.
+               100 = top of range, 10 = bottom of range (linearly interpolated).
 
     Packet layout (5-byte chunks):
       Chunk 0 [0:5]   back A start  opcode=0x81
@@ -61,7 +64,11 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True):
       Chunks 3-11     zeros
     """
     speed_min, speed_max = CLUB_SPEED_RANGES.get(club_name, CLUB_SPEED_RANGES["Driver"])
-    target_speed = random.uniform(speed_min, speed_max) * random.uniform(0.95, 1.05)
+    pct = max(10, min(100, speed_pct)) / 100.0
+    target_center = speed_max * pct
+    band = (speed_max - speed_min) * 0.05  # ±5% of range for natural variation
+    target_speed = random.uniform(max(speed_min * 0.5, target_center - band),
+                                  target_center + band)
 
     profile_name, profile = _pick_profile(shot_type)
     target_face = random.uniform(*profile["face"])
@@ -130,7 +137,7 @@ class SimulatedOptiShot:
     def __init__(self):
         print("\n" + "*" * 40)
         print(" SIMULATION MODE ACTIVE")
-        print(" Press 'ENTER' or 'S' to simulate a swing.")
+        print(" Press Ctrl+Space or Ctrl+S to simulate a swing.")
         print(" Press 'Q' to quit.")
         print("*" * 40 + "\n")
         try:

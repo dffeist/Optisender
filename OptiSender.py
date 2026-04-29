@@ -63,18 +63,17 @@ def main():
             return
         if not ctrl_held["value"]:
             return
-        try:
-            ch = key.char.lower() if hasattr(key, 'char') else None
-            if ch == 's':
+        vk = getattr(key, 'vk', None)
+        if vk is not None:
+            vk_upper = vk & ~0x20  # normalize to uppercase virtual key
+            if vk_upper == ord('S'):
                 sim_input["trigger"] = True
-            elif ch == 'b':
+            elif vk_upper == ord('B'):
                 sim_input["toggle_ball"] = True
-            elif ch == 'h':
+            elif vk_upper == ord('H'):
                 sim_input["toggle_handed"] = True
-            elif ch == 'd':
+            elif vk_upper == ord('D'):
                 sim_input["toggle_pin"] = True
-        except AttributeError:
-            pass
         if key == keyboard.Key.space:
             sim_input["trigger"] = True
         if key == keyboard.Key.up:
@@ -263,7 +262,9 @@ def main():
             else:
                 if sim_input["trigger"]:
                     print("\n[SIMULATION] Triggering simulated swing...")
-                    data = simulation.generate_simulated_shot(user_club)
+                    data = simulation.generate_simulated_shot(
+                        user_club, speed_pct=overlay.get_speed_pct()
+                    )
                     sim_input["trigger"] = False
 
             if data:

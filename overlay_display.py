@@ -23,8 +23,13 @@ class OverlayDisplay:
 
     def __init__(self):
         self._queue = queue.Queue()
+        self._speed_pct = 100
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def get_speed_pct(self) -> int:
+        """Returns the current swing speed slider value (10–100)."""
+        return self._speed_pct
 
     def push_state(self, state: dict):
         """Thread-safe update called from the main OptiSender loop."""
@@ -37,7 +42,7 @@ class OverlayDisplay:
         self._root.title("OptiSender")
         self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
-        self._root.geometry(f"{WIDTH}x250+13+27")
+        self._root.geometry(f"{WIDTH}x270+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
         self._drag_x = 0
@@ -51,14 +56,15 @@ class OverlayDisplay:
         root = self._root
 
         # ── Title / drag bar ─────────────────────────────────────────
-        title_bar = tk.Frame(root, bg="#111111", cursor="fleur")
+        title_bar = tk.Frame(root, bg="#2a4a6b", cursor="fleur")
         title_bar.pack(fill="x")
-        title_lbl = tk.Label(title_bar, text="⛳ OptiSender", bg="#111111", fg=ACCENT,
+        title_lbl = tk.Label(title_bar, text="⛳ OptiSender  ✥", bg="#2a4a6b", fg="#ffffff",
                              font=FONT_HDR, pady=4, cursor="fleur")
         title_lbl.pack(side="left", padx=6)
         self._pin_btn = tk.Button(
-            title_bar, text="📌", bg="#111111", fg=ACCENT,
+            title_bar, text="📌", bg="#2a4a6b", fg="#ffffff",
             font=("Consolas", 9), relief="flat", cursor="hand2",
+            activebackground="#3a5a7b", activeforeground="#ffffff",
             command=self._toggle_pin
         )
         self._pin_btn.pack(side="right", padx=4)
@@ -70,6 +76,36 @@ class OverlayDisplay:
         self._conn_lbl = tk.Label(root, text="● Connected", bg=BG,
                                   fg=ON_COLOR, font=FONT_HDR, anchor="center")
         self._conn_lbl.pack(fill="x", padx=5, pady=(4, 1))
+
+        # ── Simulation speed slider (hidden in hardware mode) ─────────
+        self._sim_speed_frame = tk.Frame(root, bg=BG)
+        self._sim_speed_frame.pack(fill="x", padx=5, pady=(0, 2))
+        self._sim_speed_frame.pack_forget()  # hidden until simulation mode
+
+        spd_top = tk.Frame(self._sim_speed_frame, bg=BG)
+        spd_top.pack(fill="x")
+        tk.Label(spd_top, text="Swing Speed", bg=BG, fg=DIM,
+                 font=FONT_LBL).pack(side="left")
+        self._speed_val_lbl = tk.Label(spd_top, text="100%", bg=BG,
+                                       fg=ACCENT, font=FONT_LBL)
+        self._speed_val_lbl.pack(side="right")
+
+        self._speed_var = tk.IntVar(value=100)
+        self._speed_var.trace_add("write", self._on_speed_change)
+        tk.Scale(
+            self._sim_speed_frame,
+            variable=self._speed_var,
+            from_=10, to=100,
+            orient="horizontal",
+            bg="#2a4a6b", fg="#ffffff",
+            troughcolor="#0d1f30",
+            activebackground="#4fc3f7",
+            highlightthickness=1,
+            highlightbackground="#4fc3f7",
+            bd=0,
+            showvalue=False,
+            length=WIDTH - 16,
+        ).pack(fill="x")
 
         # ── Status row (Ball / Hand) ──────────────────────────────────
         status = tk.Frame(root, bg=BG)
@@ -145,6 +181,11 @@ class OverlayDisplay:
                 text="◌ Simulation" if sim else "● Connected",
                 fg=DIM if sim else ON_COLOR
             )
+            if sim:
+                self._sim_speed_frame.pack(fill="x", padx=5, pady=(0, 2),
+                                           after=self._conn_lbl)
+            else:
+                self._sim_speed_frame.pack_forget()
 
         using_ball = s.get("using_ball", True)
         self._ball_lbl.config(
@@ -165,6 +206,11 @@ class OverlayDisplay:
             if key in self._vars and value is not None:
                 var, unit = self._vars[key]
                 var.set(f"{value}{unit}" if unit else str(value))
+
+    def _on_speed_change(self, *_):
+        v = self._speed_var.get()
+        self._speed_pct = v
+        self._speed_val_lbl.config(text=f"{v}%")
 
     def _toggle_pin(self):
         self._always_on_top = not self._always_on_top
