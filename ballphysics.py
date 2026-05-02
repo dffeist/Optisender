@@ -48,13 +48,13 @@ class PhysicsEngine:
         # Raw sensor sees LH swing as a mirrored RH swing — flip both signs.
         sign = -1 if left_handed else 1
         face_angle = metrics.get('face_angle', 0.0) * sign
-        path       = metrics.get('path', 0.0)       * sign
+        path       = metrics.get('path_deg', 0.0)    * sign
 
         club_params = self.params.get(club_name, self.params.get("Driver"))
 
         # 1. Ball Speed
         smash = club_params.get("BallSpeed", 1.45)
-        contact_penalty = abs(face_contact) * 0.05
+        contact_penalty = abs(face_contact) * 0.03
         ball.ball_speed = club_speed * (smash - contact_penalty)
 
         # 2. Vertical Launch Angle
@@ -64,9 +64,9 @@ class PhysicsEngine:
         # 3. Horizontal Launch Angle — mostly face, some path
         ball.launch_direction = (face_angle * 0.85) + (path * 0.15)
 
-        # 4. Total Spin — base rate scaled by club speed
+        # 4. Total Spin — loft-driven base rate (speed is a minor factor, not a primary scaler)
         spin_base = (club_params.get("BSLow", 2000) + club_params.get("BSHigh", 3000)) / 2.0
-        ball.total_spin = spin_base * (club_speed / 100.0)
+        ball.total_spin = spin_base
 
         # 5. Spin Axis — face-to-path difference drives curve
         # Positive = fade/slice (RH), negative = draw/hook (RH).

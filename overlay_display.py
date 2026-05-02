@@ -9,9 +9,9 @@ ACCENT    = "#4fc3f7"
 DIM       = "#888888"
 ON_COLOR  = "#66bb6a"
 OFF_COLOR = "#ef5350"
-FONT_HDR  = ("Consolas", 10, "bold")
-FONT_VAL  = ("Consolas", 10)
-FONT_LBL  = ("Consolas", 9)
+FONT_HDR  = ("Consolas", 20, "bold")
+FONT_VAL  = ("Consolas", 20)
+FONT_LBL  = ("Consolas", 18)
 WIDTH     = 160
 
 
@@ -42,7 +42,7 @@ class OverlayDisplay:
         self._root.title("OptiSender")
         self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
-        self._root.geometry(f"{WIDTH}x270+13+27")
+        self._root.geometry(f"{WIDTH}x620+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
         self._drag_x = 0
@@ -59,7 +59,7 @@ class OverlayDisplay:
         title_bar = tk.Frame(root, bg="#2a4a6b", cursor="fleur")
         title_bar.pack(fill="x")
         title_lbl = tk.Label(title_bar, text="⛳ OptiSender  ✥", bg="#2a4a6b", fg="#ffffff",
-                             font=FONT_HDR, pady=4, cursor="fleur")
+                             font=("Consolas", 11, "bold"), pady=4, cursor="fleur")
         title_lbl.pack(side="left", padx=6)
         self._pin_btn = tk.Button(
             title_bar, text="📌", bg="#2a4a6b", fg="#ffffff",
@@ -74,7 +74,7 @@ class OverlayDisplay:
 
         # ── Connection status ─────────────────────────────────────────
         self._conn_lbl = tk.Label(root, text="● Connected", bg=BG,
-                                  fg=ON_COLOR, font=FONT_HDR, anchor="center")
+                                  fg=ON_COLOR, font=("Consolas", 10, "bold"), anchor="center")
         self._conn_lbl.pack(fill="x", padx=5, pady=(4, 1))
 
         # ── Simulation speed slider (hidden in hardware mode) ─────────
@@ -150,14 +150,15 @@ class OverlayDisplay:
 
         self._vars = {}
         for display_name, key, unit in club_rows:
-            row = tk.Frame(metrics_frame, bg=BG)
-            row.pack(fill="x")
-            tk.Label(row, text=display_name, bg=BG, fg=DIM,
-                     font=FONT_LBL, width=9, anchor="w").pack(side="left")
+            cell = tk.Frame(metrics_frame, bg=BG)
+            cell.pack(fill="x", pady=2)
+            tk.Label(cell, text=display_name, bg=BG, fg=DIM,
+                     font=FONT_LBL, anchor="center").pack(fill="x")
             var = tk.StringVar(value="---")
+            val_font = ("Consolas", 14) if key == "face_angle" else FONT_VAL
             self._vars[key] = (var, unit)
-            tk.Label(row, textvariable=var, bg=BG, fg=FG,
-                     font=FONT_VAL, anchor="e").pack(side="right")
+            tk.Label(cell, textvariable=var, bg=BG, fg=FG,
+                     font=val_font, anchor="center").pack(fill="x")
 
     # ------------------------------------------------------------------
 
@@ -199,7 +200,7 @@ class OverlayDisplay:
         source = s.get("source", "")
         hand   = s.get("hand_label", "RH")
         if club:
-            self._club_lbl.config(text=f"{club} [{source}]")
+            self._club_lbl.config(text=club)
 
         for key in ("club_speed", "face_angle", "swing_path", "face_contact", "smash_factor"):
             value = s.get(key)

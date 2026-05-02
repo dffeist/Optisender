@@ -234,6 +234,7 @@ def main():
             if not simulation_mode and reader.is_connected:
                 if now - last_keep_alive_time > KEEP_ALIVE_INTERVAL:
                     reader.keep_alive()
+                    reader.set_led_green()
                     last_keep_alive_time = now
 
             # Reconnect logic: if device disconnected, fall to sim and retry
