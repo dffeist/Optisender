@@ -64,7 +64,7 @@ class PhysicsEngine:
         ball.ball_speed = club_speed * (smash - contact_penalty)
 
         # 2. Vertical Launch Angle — raw face_angle retained (loft relationship, less sensor-error sensitive)
-        base_vla = (club_params.get("VlaLow", 10) + club_params.get("VlaHigh", 14)) / 2.0
+        base_vla = club_params.get("Vla", 12.0)
         ball.launch_angle = base_vla + (face_angle * 0.3)
 
         # Compressed face angle for direction/spin: tanh leaves small angles (~0-10 deg) nearly
@@ -75,7 +75,7 @@ class PhysicsEngine:
         ball.launch_direction = (eff_face * 0.85) + (path * 0.15)
 
         # 4. Total Spin — loft-driven base rate
-        spin_base = (club_params.get("BSLow", 2000) + club_params.get("BSHigh", 3000)) / 2.0
+        spin_base = club_params.get("BS", 2500)
         ball.total_spin = spin_base
 
         # 5. Spin Axis — face-to-path difference drives curve
