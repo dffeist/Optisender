@@ -1,3 +1,81 @@
+# OptiSender v1.0.0a4 — Release Notes
+
+## What's New since v1.0.0a3
+
+### Tuning Editor
+A new floating Tuning Editor window lets you adjust all ball flight parameters at runtime without restarting OptiSender.
+
+- Open with **Ctrl+T** or the **Tuning** button on the overlay window
+- **Global parameters:** Speed Calibration and Face Compression affect all clubs
+- **Per-club parameters:** Ball Speed (smash factor), Launch Angle (Vla), and Base Spin (BS) adjustable per club via dropdown
+- Sliders populate from the current `tuning.json` every time the window opens
+- **Save** writes to `tuning.json` and reloads the physics engine live — no restart needed
+- **Cancel** reverts all sliders to the last saved state and closes the window
+- **Revert to Defaults** restores factory defaults from `tuning_default.json`
+- Unsaved-change guard: closing with unsaved changes presents a Save & Close / Cancel Changes dialog with no plain dismiss
+- Window is draggable and stays on top of other applications
+
+### Face Angle Compression (tanh model)
+A new non-linear face angle compression model reduces the effect of erratic face angle readings from the OptiShot pad while preserving accuracy on small, realistic angles.
+
+- Uses `eff_face = k × tanh(face_angle / k)` to dampen extreme readings
+- Compression level is tunable in the Tuning Editor as a 0–100% slider
+  - **0%** — k=200, compression is negligible (realistic, full face influence)
+  - **50%** — k=15 (default), ±30° face reduced ~50% laterally
+  - **100%** — k≈0, near-perfectly straight regardless of face angle
+- Raw face angle still used for vertical launch angle; only horizontal launch and spin axis are compressed
+
+### Tuning Simplified to Single Vla / BS per Club
+`tuning.json` previously stored `VlaLow`/`VlaHigh` and `BSLow`/`BSHigh` pairs. These have been collapsed to single `Vla` and `BS` values per club, reducing complexity and making tuning more predictable.
+
+- `ballphysics.py` updated to read `Vla` and `BS` directly
+- `tuning_default.json` added as a factory-defaults reference file (not modified by the Tuning Editor)
+- All existing club entries migrated to the new single-value format
+
+### Face Angle Sign Convention (Trackman)
+Face angle sign convention now matches Trackman throughout the pipeline:
+- **Positive** = open (pointing right for RH, pointing left for LH)
+- **Negative** = closed
+
+`shot_processor.py` negates the raw hardware value to align with this convention. `simulation.py` encodes shot profiles using Trackman-convention values, which are then negated before HID encoding so they decode correctly after processing.
+
+### Left-Handed Support Improvements
+- Face angle, swing path, spin axis, and face contact labels all correctly flip for left-handed players
+- Toe/heel contact labels physically reversed for LH (sensor geometry is mirrored)
+- Overlay handedness indicator updated in real time
+
+### Overlay Display Updates
+- **Tuning** button added to the overlay — opens the Tuning Editor window
+- Overlay now accepts `sim_input` dict reference, allowing the Tuning button to signal the main loop
+- `schedule_ui()` helper added to safely post callables onto the Tk thread from any thread
+
+### README Rewrite
+`README.md` fully rewritten to reflect all current features:
+- GitHub Releases download link for the pre-built executable at the top of Installation
+- Installation split into Option A (executable) and Option B (source/developers)
+- New Overlay Display and Tuning Editor sections with detailed descriptions
+- Updated keyboard controls table including Ctrl+T
+- Updated Data Flow Architecture with current formulas (tanh compression, single Vla/BS)
+- Updated Physics & Tuning Reference and File Reference
+
+---
+
+## Files Changed since v1.0.0a3
+
+| File | Change |
+|---|---|
+| `tuning_editor.py` | New — floating Tuning Editor window (Toplevel in overlay's Tk thread) |
+| `tuning_default.json` | New — factory-default tuning values, never modified at runtime |
+| `overlay_display.py` | Added Tuning button, `schedule_ui()`, `sim_input` integration |
+| `ballphysics.py` | tanh face compression, single Vla/BS per club, LH sign handling |
+| `shot_processor.py` | Face angle negated to Trackman convention |
+| `simulation.py` | Profiles in Trackman convention, encode_face negated before HID encoding |
+| `OptiSender.py` | TuningEditor integration, Ctrl+T, physics reload, LH label fixes |
+| `tuning.json` | Simplified to single Vla/BS, added FaceCompression section |
+| `README.md` | Full rewrite — current features, tuning guide, architecture |
+
+---
+
 # OptiSender v1.0.0a3 — Release Notes
 
 ## What's New since v1.0.0a2

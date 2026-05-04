@@ -21,11 +21,18 @@ class OverlayDisplay:
     Runs in its own thread. Update via push_state(state_dict).
     """
 
-    def __init__(self):
+    def __init__(self, sim_input=None):
         self._queue = queue.Queue()
         self._speed_pct = 100
+        self._sim_input = sim_input
+        self._tk_ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def schedule_ui(self, func):
+        """Schedule a callable to run on the Tk thread. Safe to call from any thread."""
+        self._tk_ready.wait()
+        self._root.after(0, func)
 
     def get_speed_pct(self) -> int:
         """Returns the current swing speed slider value (10–100)."""
@@ -39,6 +46,7 @@ class OverlayDisplay:
 
     def _run(self):
         self._root = tk.Tk()
+        self._tk_ready.set()
         self._root.title("OptiSender")
         self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
@@ -121,10 +129,14 @@ class OverlayDisplay:
                                   fg=ACCENT, font=FONT_HDR)
         self._hand_lbl.pack(side="left", padx=(1, 0))
 
-        # ── D-toggle hint ─────────────────────────────────────────────
-        self._pin_hint = tk.Label(root, text="D: always-on-top  ON",
-                                  bg=BG, fg=DIM, font=("Consolas", 8))
-        self._pin_hint.pack(fill="x", padx=5, pady=(0, 2))
+        # ── Tuning Editor Button ──────────────────────────────────────
+        self._tuning_btn = tk.Button(
+            root, text="Tuning", bg="#2a4a6b", fg="#ffffff",
+            font=("Consolas", 10, "bold"), relief="flat", cursor="hand2",
+            activebackground="#3a5a7b", activeforeground="#ffffff",
+            command=self._handle_tuning_click
+        )
+        self._tuning_btn.pack(fill="x", padx=5, pady=(0, 2))
 
         _sep(root)
 
@@ -213,12 +225,14 @@ class OverlayDisplay:
         self._speed_pct = v
         self._speed_val_lbl.config(text=f"{v}%")
 
+    def _handle_tuning_click(self):
+        if self._sim_input:
+            self._sim_input["toggle_tuning"] = True
+
     def _toggle_pin(self):
         self._always_on_top = not self._always_on_top
         self._root.attributes("-topmost", self._always_on_top)
-        state_str = "ON" if self._always_on_top else "OFF"
         self._pin_btn.config(fg=ACCENT if self._always_on_top else DIM)
-        self._pin_hint.config(text=f"D: always-on-top  {state_str}")
 
     def _drag_start(self, event):
         self._drag_x = event.x

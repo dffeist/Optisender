@@ -14,6 +14,7 @@ from opti_reader import OptiReader
 from data_filters import OptiFilter
 from shot_processor import ShotProcessor
 from overlay_display import OverlayDisplay
+from tuning_editor import TuningEditor
 
 API_IP = "127.0.0.1"
 API_PORT = 3111
@@ -47,13 +48,15 @@ def main():
     RECONNECT_INTERVAL  = 10.0   # seconds between reconnect attempts
     
     # Simulation Input State
-    sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False, "toggle_handed": False, "toggle_pin": False}
+    sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False,
+                 "toggle_handed": False, "toggle_pin": False, "toggle_tuning": False}
     using_ball = True
     left_handed = False
     print("Ball Mode: ON (press 'B' to toggle)")
     print("Handedness: Right-Handed (press 'H' to toggle)")
 
-    overlay = OverlayDisplay()
+    overlay = OverlayDisplay(sim_input)
+    tuning_editor = TuningEditor(overlay)
 
     ctrl_held = {"value": False}
 
@@ -74,6 +77,8 @@ def main():
                 sim_input["toggle_handed"] = True
             elif vk_upper == ord('D'):
                 sim_input["toggle_pin"] = True
+            elif vk_upper == ord('T'):
+                sim_input["toggle_tuning"] = True
         if key == keyboard.Key.space:
             sim_input["trigger"] = True
         # Club cycling via keyboard disabled — club selection comes from OGS API
@@ -126,6 +131,7 @@ def main():
         print("  Ctrl+B              : Toggle Ball On/Off")
         print("  Ctrl+H              : Toggle Left/Right Handed")
         print("  Ctrl+D              : Toggle Overlay Always-On-Top")
+        print("  Ctrl+T              : Open/Close Tuning Editor")
         if simulation_mode:
             print("  Ctrl+Space / Ctrl+S : Trigger Simulated Swing")
         listener = keyboard.Listener(on_press=on_press, on_release=on_release)
@@ -153,6 +159,17 @@ def main():
             if sim_input["toggle_pin"]:
                 sim_input["toggle_pin"] = False
                 overlay.push_state({"_toggle_pin": True})
+
+            # Check for tuning editor toggle
+            if sim_input["toggle_tuning"]:
+                sim_input["toggle_tuning"] = False
+                tuning_editor.toggle()
+
+            # Reload physics if tuning was saved or reverted
+            if tuning_editor.reload_needed.is_set():
+                tuning_editor.reload_needed.clear()
+                physics = PhysicsEngine()
+                print("[TUNING] Physics engine reloaded.")
 
             # Manual club change disabled — club selection comes from OGS API
             # if sim_input["club_shift"] != 0:

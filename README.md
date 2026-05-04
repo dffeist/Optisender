@@ -2,7 +2,7 @@
 
 A Python bridge that reads raw swing data from an **OptiShot 2** golf simulator mat over USB HID and forwards calculated ball-flight telemetry to **OpenGolfSim** via a TCP socket API.
 
-Logic and packet structure were ported from the [RepliShot](https://github.com/RepliShot) C++ project (`usbcode.cpp`, `shotprocessing.cpp`). The Python layer adds a physics/ball-flight engine and a simulation mode for development without hardware.
+Logic and packet structure were ported from the [RepliShot](https://github.com/RepliShot) C++ project (`usbcode.cpp`, `shotprocessing.cpp`). The Python layer adds a physics/ball-flight engine, a real-time tuning editor, and a simulation mode for development without hardware.
 
 ---
 
@@ -11,13 +11,15 @@ Logic and packet structure were ported from the [RepliShot](https://github.com/R
 1. [Requirements](#requirements)
 2. [Installation](#installation)
 3. [Setup & Running](#setup--running)
-4. [Data Flow Architecture](#data-flow-architecture)
-5. [HID Hardware Reference](#hid-hardware-reference)
-6. [Packet Format (60-byte HID Report)](#packet-format-60-byte-hid-report)
-7. [Physics & Tuning](#physics--tuning)
-8. [Simulation Mode](#simulation-mode)
-9. [Technical Gotchas](#technical-gotchas)
-10. [File Reference](#file-reference)
+4. [Overlay Display](#overlay-display)
+5. [Tuning Editor](#tuning-editor)
+6. [Data Flow Architecture](#data-flow-architecture)
+7. [HID Hardware Reference](#hid-hardware-reference)
+8. [Packet Format (60-byte HID Report)](#packet-format-60-byte-hid-report)
+9. [Physics & Tuning Reference](#physics--tuning-reference)
+10. [Simulation Mode](#simulation-mode)
+11. [Technical Gotchas](#technical-gotchas)
+12. [File Reference](#file-reference)
 
 ---
 
@@ -25,17 +27,35 @@ Logic and packet structure were ported from the [RepliShot](https://github.com/R
 
 | Dependency | Purpose |
 |---|---|
-| `hidapi` (via `hidapi-0.15.0-cp315-cp315-win_amd64.whl`) | Low-level USB HID communication with OptiShot 2 |
-| `pynput` | Non-blocking keyboard input for club cycling and sim triggers |
-| Python 3.15 (Windows x64) | Matches the bundled `.whl` ABI tag |
+| `hidapi` | Low-level USB HID communication with OptiShot 2 |
+| `pynput` | Non-blocking keyboard input for sim triggers and hotkeys |
+| Python 3.9+ (Windows x64) | Tkinter is included in the standard library |
 
 ---
 
 ## Installation
 
+### Option A — Download the pre-built executable (recommended for most users)
+
+The easiest way to run OptiSender is to download the latest standalone Windows executable from the **GitHub Releases** page:
+
+**[https://github.com/dffeist/Optisender/releases/latest](https://github.com/dffeist/Optisender/releases/latest)**
+
+1. Download `OptiSender.exe` from the Assets section of the latest release.
+2. Place it in any folder alongside `tuning.json` and `tuning_default.json`.
+3. Run `OptiSender.exe` — no Python installation required.
+
+> The executable bundles all dependencies. You still need the WinUSB driver for the OptiShot device (see step 3 below).
+
+---
+
+### Option B — Install from source (for developers and advanced users)
+
+The following instructions are for users who want to download and run the original Python source code.
+
 ```bash
-# 1. Install the bundled hidapi wheel (must match your Python version/arch)
-pip install hidapi-0.15.0-cp315-cp315-win_amd64.whl
+# 1. Install hidapi
+pip install hidapi
 
 # 2. Install remaining dependencies
 pip install pynput
@@ -45,7 +65,7 @@ pip install pynput
 #      VID: 0x0547  PID: 0x3294
 ```
 
-> If `pynput` is unavailable the program still runs, but keyboard club cycling and simulation triggers are disabled.
+> If `pynput` is unavailable the program still runs, but Ctrl keyboard shortcuts and simulation triggers are disabled.
 
 ---
 
@@ -86,6 +106,7 @@ All shortcuts require holding **Ctrl** first. This avoids conflicts with the sim
 | `Ctrl + B` | Always | Toggle ball detection on / off |
 | `Ctrl + H` | Always | Toggle Left / Right handed mode |
 | `Ctrl + D` | Always | Toggle overlay window always-on-top |
+| `Ctrl + T` | Always | Open / close the Tuning Editor window |
 
 > **Club selection** is driven automatically by the OpenGolfSim API — when you change clubs in-game the active club updates in OptiSender. Manual keyboard cycling has been removed.
 
@@ -93,7 +114,139 @@ All shortcuts require holding **Ctrl** first. This avoids conflicts with the sim
 
 #### Why Ctrl-modified shortcuts?
 
-OptiSender runs alongside another program that also reads keyboard input. Plain key bindings (single letters, arrow keys) risk being captured by whichever window has focus. Ctrl-modified shortcuts are almost never claimed by golf sim UIs and avoid common OS intercepts (`Alt+F4`, `Alt+Enter`, `Alt+Tab`). `Ctrl+C` and `Ctrl+Z` are reserved by the OS and intentionally not used.
+OptiSender runs alongside another program that also reads keyboard input. Plain key bindings risk being captured by whichever window has focus. Ctrl-modified shortcuts are almost never claimed by golf sim UIs and avoid common OS intercepts (`Alt+F4`, `Alt+Enter`, `Alt+Tab`). `Ctrl+C` and `Ctrl+Z` are reserved by the OS and intentionally not used.
+
+---
+
+## Overlay Display
+
+A narrow floating window appears in the top-left corner of the screen when OptiSender starts. It shows live shot metrics and device state at a glance.
+
+| Section | Content |
+|---|---|
+| Connection status | `● Connected` (green) or `◌ Simulation` (grey) |
+| Swing Speed slider | Visible in simulation mode only — scales simulated club speed 10–100% |
+| B / H indicators | Ball detection ON/OFF and Left/Right handed mode |
+| **Tuning button** | Opens the Tuning Editor window (same as `Ctrl+T`) |
+| Club name | Current club as reported by OpenGolfSim |
+| Metrics grid | Club Speed, Face Angle, Path, Contact, Smash Factor from last shot |
+
+The overlay window can be dragged anywhere on screen. The **📌 pin button** in the title bar toggles always-on-top (`Ctrl+D`).
+
+---
+
+## Tuning Editor
+
+The Tuning Editor lets you adjust ball-flight characteristics in real time without restarting OptiSender. Open it with **`Ctrl+T`** or by clicking the **Tuning** button on the overlay.
+
+### Opening and saving
+
+- **Open:** `Ctrl+T` or click the Tuning button on the overlay. The editor always reads the current `tuning.json` on open so sliders reflect the last saved state.
+- **Save:** Click **Save** and confirm the popup. `tuning.json` is written immediately and the physics engine reloads — the next swing uses the new values.
+- **Cancel:** Click **Cancel** to discard all unsaved changes and close the window.
+- **Revert to Defaults:** Click **Revert to Defaults** and confirm. `tuning_default.json` is copied over `tuning.json` and the physics engine reloads.
+- **Unsaved changes guard:** Pressing `Ctrl+T` (or clicking the window's close button) while there are unsaved changes shows a forced-choice dialog — **Save & Close** or **Cancel Changes**. There is no plain dismiss.
+
+### Global settings
+
+#### Speed Calibration (1.00 – 1.20)
+
+A multiplier applied to the raw club head speed reading from the OptiShot sensor before any other calculation. The sensor reads slightly low due to quantization in the timing hardware.
+
+| Value | Effect |
+|---|---|
+| 1.00 | Raw sensor reading, no correction |
+| **1.10** | **Default — compensates for typical sensor underread** |
+| 1.20 | Maximum correction — use if ball speed feels too low vs a real launch monitor |
+
+Increasing this value increases **all** of the following: ball speed, carry distance, and roll.
+
+#### Face Compression (0% – 100%)
+
+Controls how aggressively extreme face angle readings from the OptiShot sensor are dampened before they influence spin axis and horizontal launch direction. The OptiShot sensor becomes less reliable as face angle approaches ±30°; this setting reduces the impact of those noisy extreme readings.
+
+The compression uses a `tanh`-based function internally (parameter `k` stored in `tuning.json`). The slider maps to a percentage for clarity:
+
+| Slider | Internal k | Effect on ball flight |
+|---|---|---|
+| **0%** | k = 200 | No compression — face angle applied at full strength. Most realistic for accurate face readings. |
+| **50%** | k = 15 | **Default** — a ±30° face angle reading reduces lateral ball displacement by approximately 50%. Balances realism with sensor noise tolerance. |
+| **100%** | k ≈ 0 | Maximum compression — face angle has almost no effect on lateral or spin. Ball flies near-straight regardless of face angle reading. |
+
+> Small face angles (0–10°) where the sensor is reliable are barely affected at any setting. Compression increases progressively for larger readings.
+
+**What it changes in the shot:**
+- Lower % → more slice/hook curve, more lateral ball displacement for open/closed face readings
+- Higher % → flatter shot shape, less penalty for sensor noise at extreme face angles
+
+### Per-club settings
+
+Select a club from the dropdown. The three sliders update to show that club's current values and their valid range (semi-pro floor to 20-handicap amateur ceiling).
+
+#### Ball Speed — Smash Factor (per club)
+
+The ratio of ball speed to club head speed. A higher smash factor means more energy transfer from club to ball — which means more distance.
+
+| Smash factor range | Who it represents |
+|---|---|
+| Lower end of range | 20-handicap amateur — off-center contact, energy loss |
+| **Tuning.json default** | Mid-handicap amateur baseline |
+| Upper end of range | Semi-professional — consistent center contact |
+
+**Effect:** Increasing this value increases ball speed and carry distance for every shot with that club. It does not affect shot shape, spin, or launch angle.
+
+#### Launch Angle / Vla — Vertical Launch Angle (per club)
+
+The base vertical launch angle in degrees, before face angle adds a small adjustment (±a few degrees for very open or closed faces).
+
+| Value direction | Effect |
+|---|---|
+| Lower angle | Flatter, more penetrating ball flight — more roll, less carry height |
+| **Default** | Typical for the club's loft at mid-handicap swing speed |
+| Higher angle | Higher, softer ball flight — more carry, less roll |
+
+Each club has its own realistic range: Driver defaults around 12.5°, short irons and wedges are in the 28–35° range, reflecting the natural loft progression of the bag.
+
+**Effect:** Changing this value directly shifts the apex height and carry/roll split of every shot with that club. It does not affect lateral shape or spin rate.
+
+#### Base Spin / BS — Back Spin (per club)
+
+The base back-spin rate in RPM sent to the simulator. Higher spin produces a higher, softer landing ball flight with more stopping power; lower spin produces a flatter, more penetrating flight with more roll.
+
+| Value direction | Effect |
+|---|---|
+| Lower spin | Flatter flight, more roll-out after landing |
+| **Default** | Typical for the club at mid-handicap contact quality |
+| Higher spin | Higher flight, steeper descent angle, less roll |
+
+Realistic spin ranges vary significantly by club:
+
+| Club | Typical range |
+|---|---|
+| Driver | 1,800 – 4,500 rpm |
+| 7-iron | 5,000 – 11,000 rpm |
+| Pitching Wedge | 7,000 – 15,000 rpm |
+| Lob Wedge | 8,500 – 18,000 rpm |
+
+**Effect:** Spin rate affects apex height, carry distance, and stopping power. It does not affect lateral ball direction or shot shape (spin axis controls that).
+
+### How the tuning values interact
+
+```
+Club Head Speed (from sensor × Speed Calibration)
+    │
+    ├─── × BallSpeed (smash factor) ──────────────→ Ball Speed (distance)
+    │
+    └─── via ShotProcessor → face_angle, path
+              │
+              ├─── face_angle through Face Compression (tanh) = eff_face
+              │
+              ├─── Vla + (face_angle × 0.3) ──────────────────→ Vertical Launch Angle
+              ├─── (eff_face × 0.85) + (path × 0.15) ─────────→ Horizontal Launch Angle (start direction)
+              └─── eff_face − path ────────────────────────────→ Spin Axis (curve direction)
+                                                                   (positive = fade/slice RH)
+              BS ────────────────────────────────────────────────→ Total Spin (height / stopping power)
+```
 
 ---
 
@@ -102,8 +255,8 @@ OptiSender runs alongside another program that also reads keyboard input. Plain 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      OptiShot 2 Mat                     │
-│  Back Sensor Row (8 LEDs)  ←  Ball crosses back row     │
-│  Front Sensor Row (8 LEDs) ←  Ball crosses front row    │
+│  Back Sensor Row (8 LEDs)  ←  Club crosses back row     │
+│  Front Sensor Row (8 LEDs) ←  Club crosses front row    │
 └────────────────────┬────────────────────────────────────┘
                      │ USB HID (VID 0x0547 / PID 0x3294)
                      ▼
@@ -135,18 +288,24 @@ OptiSender runs alongside another program that also reads keyboard input. Plain 
 │  • Detects ball hit by gap anomaly (gap > 0x25 then     │
 │    confirmed < 0x20 on next 0x4A opcode)                │
 │  • Computes swing speed:                                │
-│      speed = (SENSOR_SPACING / (elapsed * 18)) * 2236.94│
+│      speed = (SENSOR_SPACING / (elapsed × 18)) × 2236.94│
+│  • Back-adjusts elapsed for ball-impact duration        │
 │  • Tracks min/max active LED bits across back/front rows│
-│  • Derives smash_factor from back-row contact position  │
+│  • Derives face contact from back-row LED centroid      │
 │                                                         │
 │  PASS 2 — Face Angle (Trigonometric)                    │
-│  • Per-chunk: measures lateral shift of active LEDs     │
-│    between consecutive chunks (y in LED units)          │
+│  • Per-chunk: measures lateral LED shift between        │
+│    consecutive sensor readings (y in LED units)         │
 │  • x_travel = speed_per_tick × ticks                   │
 │  • angle = atan(x / y) in degrees                       │
 │  • Weighted average: (front_avg + 2×back_avg) / 3       │
+│  • Sign negated to match Trackman convention:           │
+│    positive = open (right) for RH golfer                │
 │                                                         │
-│  Returns: speed, face_angle, path, contact, smash_factor│
+│  Path: atan2(centroid_front − centroid_back, spacing)   │
+│    positive = in-to-out (right) for RH golfer           │
+│                                                         │
+│  Returns: speed, face_angle, path_deg, contact          │
 └────────────────────┬────────────────────────────────────┘
                      │ metrics dict
                      ▼
@@ -154,11 +313,19 @@ OptiSender runs alongside another program that also reads keyboard input. Plain 
 │                   PhysicsEngine                         │
 │  ballphysics.py  +  tuning.json                         │
 │                                                         │
-│  • Ball Speed   = club_speed × smash − contact_penalty  │
-│  • Launch Angle = base_VLA + (face_angle × 0.3)         │
-│  • Horiz. Angle = (face × 0.85) + (path × 0.5)         │
-│  • Total Spin   = base_spin × (club_speed / 100)        │
-│  • Spin Axis    = (face − path×1.5) × 2.5               │
+│  Sign convention (Trackman):                            │
+│    face_angle > 0 = open / pointing right (RH)         │
+│    path > 0       = in-to-out / rightward (RH)         │
+│    Left-handed: both values sign-flipped before physics │
+│                                                         │
+│  eff_face = k × tanh(face_angle / k)   [compression]   │
+│                                                         │
+│  Ball Speed   = club_speed × BallSpeed − contact_penalty│
+│  Launch Angle = Vla + (face_angle × 0.3)               │
+│  Horiz. Angle = (eff_face × 0.85) + (path × 0.15)      │
+│  Total Spin   = BS  (per-club base spin from tuning)    │
+│  Spin Axis    = eff_face − path                         │
+│    positive = fade/slice (RH), negative = draw/hook (RH)│
 │                                                         │
 │  All base values per-club from tuning.json              │
 └────────────────────┬────────────────────────────────────┘
@@ -179,10 +346,9 @@ OptiSender runs alongside another program that also reads keyboard input. Plain 
 │       "spinAxis": <deg>                                 │
 │    }}                                                   │
 │                                                         │
-│  Inbound events (server-pushed, no polling):            │
-│    type=player       → updates active club from API     │
-│    type=shot result  → carry/total/roll/height/lateral  │
-│    type=device status → device ready/busy state         │
+│  Inbound events (server-pushed):                        │
+│    type=player      → updates active club from API      │
+│    type=result      → carry / total / roll displayed    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -196,9 +362,10 @@ OptiSender runs alongside another program that also reads keyboard input. Plain 
 | **Product ID (PID)** | `0x3294` |
 | **Read packet size** | 60 bytes |
 | **Write report size** | 61 bytes (Report ID `0x00` + 1 command byte + 59 zero bytes) |
-| **Back sensor row** | 8 LEDs, spacing `0.5 in` (12.7 mm); bits in `data[i]` or `data[i+1]` |
-| **Front sensor row** | 8 LEDs, same spacing; opcode `0x4A` |
-| **Inter-row spacing** | `2.25 in` (57.15 mm) — used for speed calculation |
+| **Back sensor row** | 8 LEDs; bits in `data[i]` or `data[i+1]` |
+| **Front sensor row** | 8 LEDs; opcode `0x4A` |
+| **Inter-row spacing** | 185 hardware tick units (`SENSOR_SPACING`) |
+| **LED lateral spacing** | 15 hardware tick units (`LED_SPACING`) |
 
 ### Command Bytes
 
@@ -234,11 +401,10 @@ Offset +4  Gap low byte
 ### Speed Formula
 
 ```
-speed_mph = (SENSOR_SPACING / (elapsed_ticks × 18)) × 2236.94
+speed_mph = (SENSOR_SPACING / (elapsed_ticks × 18)) × 2236.94 × SpeedCalibration
 ```
 
-Where `SENSOR_SPACING = 28500` (hardware ticks spanning 57.15 mm between rows).  
-The `18` divisor and `2236.94` multiplier are directly inherited from RepliShot's `usbcode.cpp`.
+`SENSOR_SPACING = 185` hardware ticks. The `18` divisor and `2236.94` multiplier are inherited from RepliShot's `usbcode.cpp`. `SpeedCalibration` (default 1.10) compensates for sensor underread and is adjustable in the Tuning Editor.
 
 ### Ball-Hit Detection
 
@@ -250,87 +416,107 @@ On confirmation, elapsed time is back-adjusted by `prev_gap` to strip out the ba
 
 ---
 
-## Physics & Tuning
+## Physics & Tuning Reference
 
-All per-club constants live in [tuning.json](tuning.json). Edit this file to dial in feel without touching code.
+All per-club constants live in [tuning.json](tuning.json). The [Tuning Editor](#tuning-editor) window provides a GUI for editing these values without touching the file directly.
 
-| Key | Description |
-|---|---|
-| `BallSpeed` | Smash factor multiplier (ball speed ÷ club speed) |
-| `VlaLow` / `VlaHigh` | Vertical launch angle range (degrees); average is used as base VLA |
-| `BSLow` / `BSHigh` | Back-spin range (rpm); average is scaled by club speed |
+### tuning.json structure
 
-**Global keys:**
+```json
+{
+    "SpeedCalibration": 1.10,
+    "FaceCompression": { "k": 15.0 },
 
-| Key | Description |
-|---|---|
-| `SensorSpacing` | Tick count spanning the inter-row distance (calibration) |
-| `LedSpacing` | Lateral LED spacing in mm (calibration) |
-| `MaxHLA` | Maximum allowed horizontal launch angle (not yet enforced in code) |
-
-### Smash Factor Contact Penalty
-
-Off-center hits (heel/toe) reduce ball speed:
-
-```python
-contact_penalty = abs(face_contact) * 0.05
-ball_speed = club_speed * (smash - contact_penalty)
+    "Driver": { "BallSpeed": 1.42, "Vla": 12.5, "BS": 3275 },
+    "3W":     { "BallSpeed": 1.40, "Vla": 13.5, "BS": 4350 },
+    ...
+}
 ```
 
-`face_contact` is the center of the active back-row LED range offset from sensor center (range ≈ −3.5 to +3.5).
+| Key | Type | Description |
+|---|---|---|
+| `SpeedCalibration` | Global float | Multiplier applied to raw sensor speed before physics |
+| `FaceCompression.k` | Global float | tanh compression parameter (k=15 default, k=200 = no compression) |
+| `BallSpeed` | Per-club float | Smash factor — ball speed ÷ club speed ratio |
+| `Vla` | Per-club float | Base vertical launch angle in degrees |
+| `BS` | Per-club int | Base back-spin in RPM |
+
+### Sign conventions (Trackman-aligned)
+
+| Value | Positive meaning | Negative meaning |
+|---|---|---|
+| `face_angle` | Open — face pointing right (RH) | Closed — face pointing left (RH) |
+| `path_deg` | In-to-out — club traveling right (RH) | Out-to-in — club traveling left (RH) |
+| `spin_axis` | Fade / slice (RH) | Draw / hook (RH) |
+
+For left-handed players both `face_angle` and `path_deg` are sign-flipped before physics so the same formulas apply.
+
+### Contact penalty
+
+Off-center hits reduce ball speed:
+
+```python
+contact_penalty = abs(face_contact) * 0.03
+ball_speed = club_speed * (BallSpeed - contact_penalty)
+```
+
+`face_contact` is the LED centroid offset from sensor center (range ≈ −3.5 to +3.5). Center contact = 0 penalty.
 
 ---
 
 ## Simulation Mode
 
-Activated automatically when no HID device is found, or can be forced by disconnecting hardware.
+Activated automatically when no HID device is found.
 
 `simulation.py → generate_simulated_shot(club_name)` synthesizes a valid 60-byte packet by:
 
-1. Picking a random club speed within mid-handicap amateur ranges (driver ~75–90 mph).
-2. Choosing a random spin axis target (−7.5° to +7.5°).
-3. Back-solving the required face angle and LED skew to produce that axis.
-4. Encoding timing ticks and bitmasks into the packet byte layout.
+1. Picking a club speed within the club's speed range, scaled by the overlay swing-speed slider (10–100%).
+2. Selecting a random shot profile (straight, fade, draw, slice, hook, toe, heel) with weighted probabilities.
+3. Encoding the target face angle and path as LED bitmasks and timing ticks.
+4. Running the result through the same `ShotProcessor` pipeline as real hardware.
 
-The resulting packet is structurally identical to hardware output and passes through `ShotProcessor` unchanged — this makes simulation a faithful integration test of the full pipeline.
+The resulting packet is structurally identical to hardware output and passes through the full pipeline unchanged — simulation is a faithful integration test of the complete data flow.
 
 ---
 
 ## Technical Gotchas
 
-### 1. `hidapi` wheel is Python-version and arch locked
-The bundled `hidapi-0.15.0-cp315-cp315-win_amd64.whl` only installs on CPython 3.15 / Windows x64. This is only required in an air gapped (no internet) environment. Pip install pyusb to avoid this issue.
+### 1. Windows USB conflict
+If you run OptiSender and the official OptiShot software at the same time, both applications attempt exclusive HID access. Whichever opens the device first wins; the other falls into simulation mode.
 
+| Scenario | Result |
+|---|---|
+| OptiSender running, OEM software closed | Works fine |
+| OEM software running, OptiSender starts | Falls into simulation mode |
+| Both started simultaneously | Race condition — first to open wins |
 
-### 2. Windows USB conflict
-A conflict may happen if you run OptiSender and the official OptiShot software at the same time. Two applications cannot hold exclusive access to the same HID device simultaneously. Whichever opens it first wins; the other gets an access denied error.
+### 2. Non-blocking reads need a tight poll loop
+`device.set_nonblocking(1)` means `device.read(60)` returns `[]` immediately when no data is available. The main loop sleeps only 10 ms between polls (`time.sleep(0.01)`). Do not increase this significantly or short-duration swing packets may be missed.
 
-Practical impact on your program
-Scenario	                                Result
-OptiSender running, OEM software closed	    Works fine
-OEM software running, OptiSender starts	    HID Connection Error → falls into simulation mode
-Both started simultaneously	                Race condition — first one to open wins
+### 3. Duplicate packet guard is byte-exact
+`OptiFilter.is_duplicate` does a full 60-byte equality check. The OptiShot hardware can re-deliver the same packet on subsequent reads before the next swing. If shots are being silently dropped, verify the filter isn't matching near-identical but distinct packets.
 
-### 3. Non-blocking reads need a tight poll loop
-`device.set_nonblocking(1)` means `device.read(60)` returns `[]` immediately when no data is available. The main loop sleeps only 10 ms between polls (`time.sleep(0.01)`). Do not increase this interval significantly or you risk missing short-duration swing packets.
+### 4. Two Tk windows share one event loop
+The overlay display (`overlay_display.py`) and the Tuning Editor (`tuning_editor.py`) both run inside a single `Tk()` instance — the editor opens as a `Toplevel` child of the overlay's root. This avoids the Python 3.13 restriction against multiple `Tk()` instances in different threads. All UI scheduling is done via `overlay.schedule_ui()` which posts callables onto the overlay's Tk event loop.
 
-### 4. Duplicate packet guard is byte-exact
-`OptiFilter.is_duplicate` does a full 60-byte equality check. The OptiShot hardware can re-deliver the same packet on subsequent reads before the next swing. If you see shots being silently dropped, verify the filter isn't matching near-identical but distinct packets (this can happen at very low swing speeds where sensor patterns repeat).
+### 5. Physics reloads on tuning save
+When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (a `threading.Event`). The main OptiSender loop checks this flag each iteration and recreates `PhysicsEngine()`, which re-reads `tuning.json`. The reload happens within one loop cycle (≤10 ms) of the save.
 
-### 5. API connection is fire-and-forget with 5-second retry
-If OpenGolfSim is not running when OptiSender starts, the program falls back to `simulation_mode=False` hardware mode but simply has no API destination. Shots are processed and printed to console but not transmitted. The retry loop checks every 5 seconds — start OpenGolfSim at any point and the next retry window will connect.
-
+---
 
 ## File Reference
 
 | File | Role |
 |---|---|
-| [OptiSender.py](OptiSender.py) | Entry point; main loop, API socket management; club set by API |
+| [OptiSender.py](OptiSender.py) | Entry point; main loop, API socket, keyboard handler, physics reload |
 | [opti_reader.py](opti_reader.py) | HID device open/close, command writes, raw 60-byte reads |
 | [data_filters.py](data_filters.py) | Duplicate and validity filters before processing |
-| [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact, smash |
-| [ballphysics.py](ballphysics.py) | Ball-flight physics engine; reads `tuning.json` |
-| [simulation.py](simulation.py) | Synthetic packet generator; mid-handicap amateur speed ranges |
-| [tuning.json](tuning.json) | Per-club smash factor, VLA range, spin range, global calibration |
-| [api_monitor.py](api_monitor.py) | Standalone API traffic monitor; event-driven, passive listener |
+| [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact |
+| [ballphysics.py](ballphysics.py) | Ball-flight physics engine; tanh face compression; reads `tuning.json` |
+| [simulation.py](simulation.py) | Synthetic packet generator; weighted shot profiles; speed-pct scaling |
+| [overlay_display.py](overlay_display.py) | Floating metrics overlay; Tk daemon thread; Tuning button |
+| [tuning_editor.py](tuning_editor.py) | Real-time tuning GUI; per-club sliders; save/cancel/revert |
+| [tuning.json](tuning.json) | Active tuning — per-club smash factor, launch angle, spin, global calibration |
+| [tuning_default.json](tuning_default.json) | Factory defaults — restored by Revert to Defaults in the Tuning Editor |
+| [api_monitor.py](api_monitor.py) | Standalone API traffic monitor; passive listener |
 | [build.bat](build.bat) | PyInstaller onedir build script for standalone Windows exe |

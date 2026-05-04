@@ -1,21 +1,86 @@
 {
-    "SpeedCalibration": 1.10,
-    "FaceCompression": { "k": 10.0 },
-
-    "Driver": { "BallSpeed": 1.42, "Vla": 12.5, "BS": 3275  },
-    "3W":     { "BallSpeed": 1.40, "Vla": 13.5, "BS": 4350  },
-    "5W":     { "BallSpeed": 1.39, "Vla": 14.0, "BS": 5200  },
-    "5H":     { "BallSpeed": 1.37, "Vla": 17.0, "BS": 4800  },
-    "3I":     { "BallSpeed": 1.37, "Vla": 15.0, "BS": 5000  },
-    "4I":     { "BallSpeed": 1.35, "Vla": 16.0, "BS": 5800  },
-    "5I":     { "BallSpeed": 1.33, "Vla": 17.5, "BS": 6500  },
-    "6I":     { "BallSpeed": 1.32, "Vla": 19.5, "BS": 7200  },
-    "7I":     { "BallSpeed": 1.31, "Vla": 21.0, "BS": 7800  },
-    "8I":     { "BallSpeed": 1.26, "Vla": 23.0, "BS": 8500  },
-    "9I":     { "BallSpeed": 1.24, "Vla": 25.5, "BS": 9500  },
-    "PW":     { "BallSpeed": 1.21, "Vla": 28.0, "BS": 10500 },
-    "GW":     { "BallSpeed": 1.20, "Vla": 30.0, "BS": 10800 },
-    "SW":     { "BallSpeed": 1.18, "Vla": 33.0, "BS": 11200 },
-    "LW":     { "BallSpeed": 1.16, "Vla": 35.0, "BS": 12000 },
-    "Putter": { "BallSpeed": 1.0,  "Vla": 0.0,  "BS": 0     }
+    "SpeedCalibration": 1.1,
+    "FaceCompression": {
+        "k": 200.0
+    },
+    "Driver": {
+        "BallSpeed": 1.42,
+        "Vla": 12.5,
+        "BS": 3275
+    },
+    "3W": {
+        "BallSpeed": 1.4,
+        "Vla": 13.5,
+        "BS": 4350
+    },
+    "5W": {
+        "BallSpeed": 1.39,
+        "Vla": 14.0,
+        "BS": 5200
+    },
+    "5H": {
+        "BallSpeed": 1.37,
+        "Vla": 17.0,
+        "BS": 4800
+    },
+    "3I": {
+        "BallSpeed": 1.37,
+        "Vla": 15.0,
+        "BS": 5000
+    },
+    "4I": {
+        "BallSpeed": 1.35,
+        "Vla": 16.0,
+        "BS": 5800
+    },
+    "5I": {
+        "BallSpeed": 1.33,
+        "Vla": 17.5,
+        "BS": 6500
+    },
+    "6I": {
+        "BallSpeed": 1.32,
+        "Vla": 19.5,
+        "BS": 7200
+    },
+    "7I": {
+        "BallSpeed": 1.31,
+        "Vla": 21.0,
+        "BS": 7800
+    },
+    "8I": {
+        "BallSpeed": 1.26,
+        "Vla": 23.0,
+        "BS": 8500
+    },
+    "9I": {
+        "BallSpeed": 1.24,
+        "Vla": 25.5,
+        "BS": 9500
+    },
+    "PW": {
+        "BallSpeed": 1.21,
+        "Vla": 28.0,
+        "BS": 10500
+    },
+    "GW": {
+        "BallSpeed": 1.2,
+        "Vla": 30.0,
+        "BS": 10800
+    },
+    "SW": {
+        "BallSpeed": 1.18,
+        "Vla": 33.0,
+        "BS": 11200
+    },
+    "LW": {
+        "BallSpeed": 1.16,
+        "Vla": 35.0,
+        "BS": 12000
+    },
+    "Putter": {
+        "BallSpeed": 1.0,
+        "Vla": 0.0,
+        "BS": 0
+    }
 }
