@@ -82,10 +82,14 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, sp
     b_lo, b_hi = profile["b_center"]
     b_min_A = max(0, min(7, random.randint(b_lo, b_hi)))
 
+    # shot_processor negates face_angle to align with Trackman convention
+    # (positive = open/right). Encode the opposite sign here so the negation
+    # produces the correct target_face value downstream.
+    encode_face = -target_face
+
     # Back sensor B offset creates the skew that encodes face angle.
     # shot_processor: angle = atan(x_travel / y_dist), y_dist = delta_LED * LED_SPACING
-    # Positive face requires b_min_A > b_min_B so y_dist > 0.
-    if target_face >= 0:
+    if encode_face >= 0:
         b_min_B = b_min_A - 1 if b_min_A > 0 else b_min_A + 1
     else:
         b_min_B = b_min_A + 1 if b_min_A < 7 else b_min_A - 1
@@ -95,10 +99,10 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, sp
     # path = (max_front - max_back) + (min_front - min_back)
     f_min = max(0, min(7, b_min_A + path_shift))
 
-    # Back timing that produces target_face through the weighted average:
+    # Back timing that produces encode_face through the weighted average:
     # result = (front_avg + back_avg*2) / 3  →  with only back sensors: result = back_avg*2/3
-    # Inverse: back_avg = target_face * 1.5
-    target_back_angle = target_face * 1.5
+    # Inverse: back_avg = encode_face * 1.5
+    target_back_angle = encode_face * 1.5
     y_dist   = (b_min_A - b_min_B) * LED_SPACING
     x_travel = abs(y_dist * math.tan(math.radians(target_back_angle))) if y_dist != 0 else 0
     # speed_per_tick = SENSOR_SPACING / total_ticks  →  ticks = x_travel / speed_per_tick

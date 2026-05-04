@@ -288,9 +288,9 @@ def main():
                     face = metrics['face_angle']
                     eff_face = -face if left_handed else face
                     if eff_face > 0.5:
-                        face_label = f"Closed {abs(face):.1f}°"
-                    elif eff_face < -0.5:
                         face_label = f"Open {abs(face):.1f}°"
+                    elif eff_face < -0.5:
+                        face_label = f"Closed {abs(face):.1f}°"
                     else:
                         face_label = f"Square {abs(face):.1f}°"
 

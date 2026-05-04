@@ -97,7 +97,7 @@ class ShotProcessor:
 
         return {
             "speed": round(swing_speed, 1),
-            "face_angle": round(face_angle, 1),
+            "face_angle": round(-face_angle, 1),
             "path": path,
             "path_deg": round(path_deg, 1),
             "contact": face_contact, # Heel/Toe offset

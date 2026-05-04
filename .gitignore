@@ -17,6 +17,9 @@ dist/
 # Build script (local only)
 build.bat
 
+# Local testing tool
+test.py
+
 # IDEs
 .vscode/
 .idea/
