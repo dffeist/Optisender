@@ -33,6 +33,12 @@ class PhysicsEngine:
             "Driver": { "BallSpeed": 1.48, "VlaLow": 10.0, "VlaHigh": 14.0, "BSLow": 2000, "BSHigh": 2800 }
         }
 
+    def _compress_face(self, face_angle):
+        # tanh compression: near-linear for small angles (reliable sensor zone 0-10 deg),
+        # progressively dampens toward +-30 deg where OptiShot sensor error is highest.
+        k = self.params.get("FaceCompression", {}).get("k", 15.0)
+        return k * math.tanh(face_angle / k)
+
     def calculate_ball_flight(self, metrics, club_name, left_handed=False):
         """
         Calculates ball flight based on metrics dictionary from ShotProcessor.
@@ -57,21 +63,24 @@ class PhysicsEngine:
         contact_penalty = abs(face_contact) * 0.03
         ball.ball_speed = club_speed * (smash - contact_penalty)
 
-        # 2. Vertical Launch Angle
+        # 2. Vertical Launch Angle — raw face_angle retained (loft relationship, less sensor-error sensitive)
         base_vla = (club_params.get("VlaLow", 10) + club_params.get("VlaHigh", 14)) / 2.0
         ball.launch_angle = base_vla + (face_angle * 0.3)
 
-        # 3. Horizontal Launch Angle — mostly face, some path
-        ball.launch_direction = (face_angle * 0.85) + (path * 0.15)
+        # Compressed face angle for direction/spin: tanh leaves small angles (~0-10 deg) nearly
+        # unchanged while dampening extreme readings (+-30 deg compresses ~48%) where sensor error peaks.
+        eff_face = self._compress_face(face_angle)
 
-        # 4. Total Spin — loft-driven base rate (speed is a minor factor, not a primary scaler)
+        # 3. Horizontal Launch Angle — mostly face, some path
+        ball.launch_direction = (eff_face * 0.85) + (path * 0.15)
+
+        # 4. Total Spin — loft-driven base rate
         spin_base = (club_params.get("BSLow", 2000) + club_params.get("BSHigh", 3000)) / 2.0
         ball.total_spin = spin_base
 
         # 5. Spin Axis — face-to-path difference drives curve
         # Positive = fade/slice (RH), negative = draw/hook (RH).
-        # Multiplier 1.0: each degree of face-to-path ≈ 1° of spin axis tilt.
-        face_to_path = face_angle - path
+        face_to_path = eff_face - path
         ball.spin_axis = face_to_path * 1.0
 
         return ball

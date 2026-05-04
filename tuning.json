@@ -1,5 +1,6 @@
 {
     "SpeedCalibration": 1.10,
+    "FaceCompression": { "k": 10.0 },
 
     "Driver": { "BallSpeed": 1.42, "VlaLow": 10.5, "VlaHigh": 14.5, "BSLow": 2900,  "BSHigh": 3650 },
     "3W":     { "BallSpeed": 1.40, "VlaLow": 11.5, "VlaHigh": 15.5, "BSLow": 3900,  "BSHigh": 4800 },
