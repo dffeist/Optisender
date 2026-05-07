@@ -19,6 +19,7 @@ build.bat
 
 # Local testing tool
 test.py
+verify_handedness.py
 
 # IDEs
 .vscode/

@@ -1,12 +1,28 @@
 import copy
 import json
+import os
 import shutil
+import sys
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-TUNING_FILE         = "tuning.json"
-TUNING_DEFAULT_FILE = "tuning_default.json"
+def _exe_dir():
+    """Directory of the executable (or script when running from source)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def _bundle_dir():
+    """Directory where PyInstaller extracts bundled data files (_internal when frozen)."""
+    if getattr(sys, "frozen", False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+# tuning.json lives next to the exe so the user can edit/save it
+TUNING_FILE         = os.path.join(_exe_dir(), "tuning.json")
+# tuning_default.json is a read-only bundled resource in _internal
+TUNING_DEFAULT_FILE = os.path.join(_bundle_dir(), "tuning_default.json")
 
 CLUBS = ["Driver", "3W", "5W", "5H", "3I", "4I", "5I",
          "6I", "7I", "8I", "9I", "PW", "GW", "SW", "LW"]
@@ -63,6 +79,7 @@ class TuningEditor:
 
         # Trace IDs for club sliders — removed/re-added on club change
         self._club_trace_ids = []
+        self._rebuilding = False   # suppresses trace callbacks during slider rebuild
 
     # ── Public API (called from main OptiSender thread) ──────────────────
 
@@ -255,6 +272,8 @@ class TuningEditor:
                 val_lbl.config(text=fmt.format(var.get()))
             except tk.TclError:
                 return
+            if self._rebuilding:
+                return
             self._sync_params_from_sliders()
             self._update_dirty_label()
 
@@ -263,6 +282,7 @@ class TuningEditor:
             self._club_trace_ids.append((var, tid))
 
     def _build_club_sliders(self, club):
+        self._rebuilding = True
         # Remove stale traces from previous club build
         for var, tid in self._club_trace_ids:
             try:
@@ -294,10 +314,12 @@ class TuningEditor:
         self._build_slider_row(self._club_frame, "Base Spin (rpm)",
                                self._rpm_var, rpm_lo, rpm_hi, rpm_step,
                                fmt="{:.0f}", is_club_slider=True)
+        self._rebuilding = False
 
     # ── Slider <-> params sync ────────────────────────────────────────────
 
     def _populate_sliders_from_params(self):
+        self._rebuilding = True
         self._speed_cal_var.set(self._params.get("SpeedCalibration", 1.10))
         k = self._params.get("FaceCompression", {}).get("k", 15.0)
         self._face_pct_var.set(self._k_to_pct(k))
@@ -307,6 +329,7 @@ class TuningEditor:
         self._bs_var.set( club_p.get("BallSpeed", r["BallSpeed"][0]))
         self._vla_var.set(club_p.get("Vla",       r["Vla"][0]))
         self._rpm_var.set(club_p.get("BS",         r["BS"][0]))
+        self._rebuilding = False
 
     def _sync_params_from_sliders(self):
         self._params["SpeedCalibration"] = round(self._speed_cal_var.get(), 3)

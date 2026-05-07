@@ -82,10 +82,7 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, sp
     b_lo, b_hi = profile["b_center"]
     b_min_A = max(0, min(7, random.randint(b_lo, b_hi)))
 
-    # shot_processor negates face_angle to align with Trackman convention
-    # (positive = open/right). Encode the opposite sign here so the negation
-    # produces the correct target_face value downstream.
-    encode_face = -target_face
+    encode_face = target_face
 
     # Back sensor B offset creates the skew that encodes face angle.
     # shot_processor: angle = atan(x_travel / y_dist), y_dist = delta_LED * LED_SPACING
