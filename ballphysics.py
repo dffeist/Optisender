@@ -50,11 +50,11 @@ class PhysicsEngine:
         club_speed   = metrics.get('speed', 0.0)
         face_contact = metrics.get('contact', 0.0)
 
-        # Apply handedness correction to sensor values before any calculation.
-        # Raw sensor sees LH swing as a mirrored RH swing — flip both signs.
-        sign = -1 if left_handed else 1
-        face_angle = metrics.get('face_angle', 0.0) * sign
-        path       = metrics.get('path_deg', 0.0)    * sign
+        # Raw sensor face angle is physically inverted for both hands (atan geometry
+        # runs opposite to Trackman convention). Negate unconditionally.
+        # Path is already correct for both hands — LH swing mirrors the sensor axis naturally.
+        face_angle = metrics.get('face_angle', 0.0) * -1
+        path       = metrics.get('path_deg', 0.0)
 
         club_params = self.params.get(club_name, self.params.get("Driver"))
 

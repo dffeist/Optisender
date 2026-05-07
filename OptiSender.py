@@ -300,10 +300,10 @@ def main():
                     path_val = metrics['path_deg']
                     eff_path = -path_val if left_handed else path_val
 
-                    # Derive face angle label
-                    # For LH: positive face angle = open (away from target), negative = closed
+                    # Derive face angle label. Raw sensor is inverted, so negate for RH.
+                    # For LH the sensor mirrors the axis, so raw sign is already correct for the label.
                     face = metrics['face_angle']
-                    eff_face = -face if left_handed else face
+                    eff_face = face if left_handed else -face
                     if eff_face > 0.5:
                         face_label = f"Open {abs(face):.1f}°"
                     elif eff_face < -0.5:
