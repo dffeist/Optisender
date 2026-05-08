@@ -23,7 +23,6 @@ class OverlayDisplay:
 
     def __init__(self, sim_input=None):
         self._queue = queue.Queue()
-        self._speed_pct = 100
         self._sim_input = sim_input
         self._tk_ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -33,10 +32,6 @@ class OverlayDisplay:
         """Schedule a callable to run on the Tk thread. Safe to call from any thread."""
         self._tk_ready.wait()
         self._root.after(0, func)
-
-    def get_speed_pct(self) -> int:
-        """Returns the current swing speed slider value (10–100)."""
-        return self._speed_pct
 
     def push_state(self, state: dict):
         """Thread-safe update called from the main OptiSender loop."""
@@ -50,7 +45,7 @@ class OverlayDisplay:
         self._root.title("OptiSender")
         self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
-        self._root.geometry(f"{WIDTH}x620+13+27")
+        self._root.geometry(f"{WIDTH}x560+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
         self._drag_x = 0
@@ -85,36 +80,6 @@ class OverlayDisplay:
                                   fg=ON_COLOR, font=("Consolas", 10, "bold"), anchor="center")
         self._conn_lbl.pack(fill="x", padx=5, pady=(4, 1))
 
-        # ── Simulation speed slider (hidden in hardware mode) ─────────
-        self._sim_speed_frame = tk.Frame(root, bg=BG)
-        self._sim_speed_frame.pack(fill="x", padx=5, pady=(0, 2))
-        self._sim_speed_frame.pack_forget()  # hidden until simulation mode
-
-        spd_top = tk.Frame(self._sim_speed_frame, bg=BG)
-        spd_top.pack(fill="x")
-        tk.Label(spd_top, text="Swing Speed", bg=BG, fg=DIM,
-                 font=FONT_LBL).pack(side="left")
-        self._speed_val_lbl = tk.Label(spd_top, text="100%", bg=BG,
-                                       fg=ACCENT, font=FONT_LBL)
-        self._speed_val_lbl.pack(side="right")
-
-        self._speed_var = tk.IntVar(value=100)
-        self._speed_var.trace_add("write", self._on_speed_change)
-        tk.Scale(
-            self._sim_speed_frame,
-            variable=self._speed_var,
-            from_=10, to=100,
-            orient="horizontal",
-            bg="#2a4a6b", fg="#ffffff",
-            troughcolor="#0d1f30",
-            activebackground="#4fc3f7",
-            highlightthickness=1,
-            highlightbackground="#4fc3f7",
-            bd=0,
-            showvalue=False,
-            length=WIDTH - 16,
-        ).pack(fill="x")
-
         # ── Status row (Ball / Hand) ──────────────────────────────────
         status = tk.Frame(root, bg=BG)
         status.pack(fill="x", padx=5, pady=(2, 1))
@@ -126,7 +91,7 @@ class OverlayDisplay:
         tk.Label(status, text="H:", bg=BG, fg=DIM,
                  font=FONT_LBL).pack(side="left")
         self._hand_lbl = tk.Label(status, text="RH", bg=BG,
-                                  fg=ACCENT, font=FONT_HDR)
+                                  fg="#f57c00", font=FONT_HDR)
         self._hand_lbl.pack(side="left", padx=(1, 0))
 
         # ── Tuning Editor Button ──────────────────────────────────────
@@ -194,11 +159,6 @@ class OverlayDisplay:
                 text="◌ Simulation" if sim else "● Connected",
                 fg=DIM if sim else ON_COLOR
             )
-            if sim:
-                self._sim_speed_frame.pack(fill="x", padx=5, pady=(0, 2),
-                                           after=self._conn_lbl)
-            else:
-                self._sim_speed_frame.pack_forget()
 
         using_ball = s.get("using_ball", True)
         self._ball_lbl.config(
@@ -206,7 +166,10 @@ class OverlayDisplay:
             fg=ON_COLOR if using_ball else OFF_COLOR
         )
         left_handed = s.get("left_handed", False)
-        self._hand_lbl.config(text="LH" if left_handed else "RH")
+        self._hand_lbl.config(
+            text="LH" if left_handed else "RH",
+            fg="#1565c0" if left_handed else "#f57c00"
+        )
 
         club   = s.get("club", "")
         source = s.get("source", "")
@@ -219,11 +182,6 @@ class OverlayDisplay:
             if key in self._vars and value is not None:
                 var, unit = self._vars[key]
                 var.set(f"{value}{unit}" if unit else str(value))
-
-    def _on_speed_change(self, *_):
-        v = self._speed_var.get()
-        self._speed_pct = v
-        self._speed_val_lbl.config(text=f"{v}%")
 
     def _handle_tuning_click(self):
         if self._sim_input:

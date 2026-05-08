@@ -8,7 +8,10 @@ except ImportError:
     keyboard = None
     print("Warning: pynput not found. Install via 'pip install pynput'.")
 
+import queue
+import threading
 import simulation
+from simulation import SimulationWindow
 from ballphysics import PhysicsEngine
 from opti_reader import OptiReader
 from data_filters import OptiFilter
@@ -46,6 +49,7 @@ def main():
     last_reconnect_attempt = 0
     KEEP_ALIVE_INTERVAL = 30.0   # seconds between keep-alive pings
     RECONNECT_INTERVAL  = 10.0   # seconds between reconnect attempts
+    sim_ready_timer     = None   # fallback timer when API result doesn't arrive
     
     # Simulation Input State
     sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False,
@@ -57,6 +61,8 @@ def main():
 
     overlay = OverlayDisplay(sim_input)
     tuning_editor = TuningEditor(overlay)
+    sim_packet_queue = queue.Queue()
+    sim_window = SimulationWindow(overlay, sim_packet_queue, sim_input)
 
     ctrl_held = {"value": False}
 
@@ -103,6 +109,8 @@ def main():
         simulation_mode = True
 
     overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "club": user_club, "source": "Ready", "hand_label": "LH" if left_handed else "RH", "simulation_mode": simulation_mode})
+    if simulation_mode:
+        sim_window.show()
 
     def try_api_connect():
         nonlocal api_socket, last_connection_attempt
@@ -154,6 +162,7 @@ def main():
                 left_handed = not left_handed
                 print(f"*** HANDEDNESS: {'Left-Handed' if left_handed else 'Right-Handed'} ***")
                 overlay.push_state({"using_ball": using_ball, "left_handed": left_handed})
+                sim_window.set_handed(left_handed)
 
             # Check for overlay pin toggle
             if sim_input["toggle_pin"]:
@@ -228,10 +237,16 @@ def main():
                                                 user_club = new_club
                                                 print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) ***")
                                                 overlay.push_state({"club": user_club, "source": "API", "hand_label": "LH" if left_handed else "RH"})
+                                                sim_window.set_club(user_club)
 
                                     elif msg_json.get("type") == "result":
                                         res_data = msg_json.get("data", {}).get("result", {})
                                         print(f"\n[API] SHOT RESULT: Carry: {res_data.get('carry', 0):.1f} | Total: {res_data.get('total', 0):.1f}")
+                                        if sim_ready_timer is not None:
+                                            sim_ready_timer.cancel()
+                                        sim_ready_timer = threading.Timer(3.0, sim_window.set_ready)
+                                        sim_ready_timer.daemon = True
+                                        sim_ready_timer.start()
 
                                     api_buffer = api_buffer[end_index:]
                                 except json.JSONDecodeError:
@@ -261,6 +276,7 @@ def main():
                 simulation_mode = True
                 last_reconnect_attempt = now
                 overlay.push_state({"simulation_mode": True})
+                sim_window.show()
 
             if simulation_mode and not reader.is_connected:
                 if now - last_reconnect_attempt > RECONNECT_INTERVAL:
@@ -272,38 +288,49 @@ def main():
                         print("[DEVICE] OptiShot reconnected — resuming hardware input.")
                         print("\nReady for a swing. Waiting for data...")
                         overlay.push_state({"simulation_mode": False})
+                        sim_window.hide()
 
             # Get Swing Data
-            data = None
+            data           = None
+            shot_club      = user_club  # may be overridden by sim window packet
+            skip_dup_check = False
             if not simulation_mode:
                 data = reader.read_raw()
             else:
-                if sim_input["trigger"]:
-                    print("\n[SIMULATION] Triggering simulated swing...")
-                    data = simulation.generate_simulated_shot(
-                        user_club, speed_pct=overlay.get_speed_pct()
-                    )
+                # Manual simulation window packet (precise metrics → exact HID packet)
+                try:
+                    item           = sim_packet_queue.get_nowait()
+                    data           = item["data"]
+                    shot_club      = item["club"]
+                    skip_dup_check = True  # every button press is intentional
+                except queue.Empty:
+                    pass
+                # Keyboard random-shot trigger (Ctrl+Space / Ctrl+S)
+                if data is None and sim_input["trigger"]:
+                    print("\n[SIMULATION] Triggering random simulated swing...")
+                    data = simulation.generate_simulated_shot(user_club)
                     sim_input["trigger"] = False
 
             if data:
-                # Apply duplicate and validity filters
-                if filters.is_duplicate(data) or not filters.is_valid_swing(data):
+                # Duplicate filter applies to hardware and keyboard triggers only —
+                # manual sim window packets are always intentional.
+                if not skip_dup_check and filters.is_duplicate(data):
+                    continue
+                if not filters.is_valid_swing(data):
                     continue
 
                 print(f"--- Valid Swing Detected ---")
                 metrics = processor.process_raw_buffer(data, using_ball=using_ball)
-                
+
                 if metrics:
-                    ball = physics.calculate_ball_flight(metrics, user_club, left_handed=left_handed)
+                    ball = physics.calculate_ball_flight(metrics, shot_club, left_handed=left_handed)
 
-                    # path_deg for display; raw path integer stays in metrics for physics
                     path_val = metrics['path_deg']
-                    eff_path = -path_val if left_handed else path_val
+                    eff_path = path_val
 
-                    # Derive face angle label. Raw sensor is inverted, so negate for RH.
-                    # For LH the sensor mirrors the axis, so raw sign is already correct for the label.
+                    # Sensor output is inverted from Trackman for both RH and LH — negate for label.
                     face = metrics['face_angle']
-                    eff_face = face if left_handed else -face
+                    eff_face = -face
                     if eff_face > 0.5:
                         face_label = f"Open {abs(face):.1f}°"
                     elif eff_face < -0.5:
@@ -329,10 +356,9 @@ def main():
                         elif min_b == 4: contact_label = "Heel"
                         else:            contact_label = "Center"
 
-                    # Derive shot shape from spin axis
-                    # For LH: positive spin axis curves left (hook), negative curves right (slice)
+                    # Spin axis is already in world-space convention after physics fix.
                     axis = ball.spin_axis
-                    eff_axis = -axis if left_handed else axis
+                    eff_axis = axis
                     if eff_axis > 10:    shape_label = "Slice"
                     elif eff_axis > 3:   shape_label = "Fade"
                     elif eff_axis > -3:  shape_label = "Straight"
@@ -343,7 +369,7 @@ def main():
                     hand_label = 'LH' if left_handed else 'RH'
                     W = 38
                     print("\n" + "=" * W)
-                    print(f"  CLUB: {user_club}  [{source}] [{hand_label}]")
+                    print(f"  CLUB: {shot_club}  [{source}] [{hand_label}]")
                     print("=" * W)
                     print(f"  {'CLUB METRICS':}")
                     print(f"    Club Speed  : {metrics['speed']:.1f} mph")
@@ -365,7 +391,7 @@ def main():
                     overlay.push_state({
                         "using_ball":   using_ball,
                         "left_handed":  left_handed,
-                        "club":         user_club,
+                        "club":         shot_club,
                         "source":       source,
                         "hand_label":   hand_label,
                         "club_speed":   f"{metrics['speed']:.1f}",
@@ -410,7 +436,14 @@ def main():
                         print("[DEVICE] Communication lost during LED feedback.")
                         reader.is_connected = False
                 else:
-                    time.sleep(1)
+                    # Cancel any previous fallback and start a new one.
+                    # Primary trigger: API "result" message (same as pad LED going green).
+                    # Fallback (2.5s): fires if API is not connected or doesn't respond.
+                    if sim_ready_timer is not None:
+                        sim_ready_timer.cancel()
+                    sim_ready_timer = threading.Timer(12.0, sim_window.set_ready)
+                    sim_ready_timer.daemon = True
+                    sim_ready_timer.start()
 
             time.sleep(0.01)
 

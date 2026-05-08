@@ -52,9 +52,14 @@ class PhysicsEngine:
 
         # Raw sensor face angle is physically inverted for both hands (atan geometry
         # runs opposite to Trackman convention). Negate unconditionally.
-        # Path is already correct for both hands — LH swing mirrors the sensor axis naturally.
         face_angle = metrics.get('face_angle', 0.0) * -1
         path       = metrics.get('path_deg', 0.0)
+
+        # Mirror both inputs for LH so physics sees the equivalent RH swing.
+        # A LH open face (+sensor) is a RH closed face (−sensor) — same ball flight.
+        if left_handed:
+            face_angle = -face_angle
+            path       = -path
 
         club_params = self.params.get(club_name, self.params.get("Driver"))
 
