@@ -1,3 +1,97 @@
+# OptiSender v1.0.0a5 — Release Notes
+
+## What's New since v1.0.0a4
+
+### Manual Simulation Window
+
+A new **Manual Simulation Window** opens automatically when no OptiShot hardware is detected, replacing the previous keyboard-only simulation flow. The window provides full control over every shot parameter and feeds exact HID packets through the complete `ShotProcessor → PhysicsEngine → API` pipeline — identical to a real pad reading.
+
+- Opens automatically at startup when no device is found; also opens if the device disconnects mid-session and closes when it reconnects
+- **Club Speed, Face Angle, and Club Path sliders** let you specify exact values rather than relying on random shot profiles
+- **Club selector** — choose any club independently of the OGS API selection for testing specific clubs
+- **Handedness toggle** — color-coded button (orange = RH, blue = LH) synced bidirectionally with `Ctrl+H` and the overlay indicator
+- **Send Shot button** — generates a precise HID packet and queues it for processing; disabled during processing to prevent missed shots
+- **Ready state indicator** — status line shows `◌ Processing…` after a shot is sent, then `● Ready` once the system is prepared for the next shot
+- The window cannot be closed manually — it is controlled entirely by hardware detection state
+
+### Ready State Tied to API Result
+
+The simulation window's ready state is now driven by the actual OpenGolfSim API response rather than a fixed software timer:
+
+- **Primary trigger:** OGS sends a `result` message → ready signalled 5 seconds later (allows the game screen to fully update)
+- **Fallback:** If the API is not connected or does not respond, ready fires automatically after 12 seconds — matching the time required for the game engine to cycle
+- Prevents shots from being queued before the simulator is ready to receive them, mirroring the green LED behaviour of the physical pad
+
+### Handedness Sign Convention Corrected
+
+A long-standing bug where left-handed ball flight was computed incorrectly has been fixed throughout the pipeline.
+
+- **Root cause:** `ballphysics.py` accepted a `left_handed` parameter but never used it — all LH shots were computed identically to RH shots
+- **Fix:** Face angle and club path are now sign-flipped before physics for LH golfers, so the same physical swing produces identical ball flight regardless of handedness
+- **Convention:** For both RH and LH, positive face = open (pointing away from the golfer), positive path = in-to-out. The sensor inversion (`encode_face = -face_angle` in `generate_from_metrics`) ensures sim window inputs round-trip correctly through `ShotProcessor`
+- Ball flight sent to the OGS API is now correct for both hands
+
+### Simulation Packet Encoding Corrected
+
+`generate_from_metrics()` previously encoded face angle with the wrong sign, causing all simulated shots (including random profiles) to produce opposite-direction ball flight:
+
+- Added `encode_face = -face_angle` to apply the same sensor inversion that real hardware produces
+- Random shot profiles (fade, draw, slice, hook) now curve in the correct direction
+- `generate_simulated_shot()` refactored to call `generate_from_metrics()` internally — both paths share identical packet-building logic
+
+### Swing Path Display Label Fixed (LH)
+
+Swing path displayed in the overlay and console for left-handed golfers was being negated, showing the inverse of the entered value:
+
+- `eff_path = -path_val if left_handed else path_val` changed to `eff_path = path_val` for both hands
+- The sensor and sim encoder preserve the golfer-convention path sign through the round-trip — no display flip is needed
+- API output unchanged (was already correct)
+
+### Overlay Display — Swing Speed Slider Removed
+
+The Swing Speed percentage slider previously shown in the overlay during simulation mode has been removed:
+
+- Club speed is now set directly in the Manual Simulation Window slider (mph, not %)
+- Overlay window height reduced to match; connection status indicator still shows `◌ Simulation` / `● Connected`
+
+### Handedness Color Coding
+
+RH/LH indicators are now color-coded consistently across all windows:
+
+- **Right-handed:** orange (`#f57c00`) — overlay indicator and sim window button
+- **Left-handed:** blue (`#1565c0`) — overlay indicator and sim window button
+
+### Duplicate Shot Filter Bypassed for Manual Simulation
+
+The byte-exact duplicate packet filter (`OptiFilter.is_duplicate`) is now bypassed for shots originating from the Manual Simulation Window:
+
+- Every button press is an intentional shot — blocking identical consecutive packets would prevent re-sending the same parameters
+- Hardware pad reads and keyboard-triggered random shots still go through the duplicate filter as before
+
+### README Updated
+
+`README.md` updated to reflect all v1.0.0a5 changes:
+
+- New **Manual Simulation Window** section with full usage guide, controls table, sign convention table, and ready-state documentation
+- Overlay Display section updated (swing speed slider removed, handedness color coding documented)
+- Simulation Mode section updated to distinguish manual vs. random keyboard trigger
+- Technical Gotchas updated from "two Tk windows" to "three Tk windows"
+- File Reference entry for `simulation.py` updated
+
+---
+
+## Files Changed since v1.0.0a4
+
+| File | Change |
+|---|---|
+| `simulation.py` | New `SimulationWindow` class; new `generate_from_metrics()`; `generate_simulated_shot()` refactored to use it; `encode_face = -face_angle` sensor inversion fix; added `import threading` |
+| `ballphysics.py` | LH sign flip applied to face angle and path before physics; `left_handed` parameter now used |
+| `OptiSender.py` | `SimulationWindow` integration; `sim_packet_queue`; API-driven ready state with 5 s delay and 12 s fallback; `skip_dup_check` for manual sim packets; swing path display negation removed for LH; face label negation unified for both hands; `import threading` added |
+| `overlay_display.py` | Swing speed slider removed; `get_speed_pct()` removed; window height reduced to 560; handedness label now color-switches between orange (RH) and blue (LH) |
+| `README.md` | Manual Simulation Window section added; overlay and simulation sections updated; gotcha #4 updated |
+
+---
+
 # OptiSender v1.0.0a4 — Release Notes
 
 ## What's New since v1.0.0a3

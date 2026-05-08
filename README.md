@@ -13,13 +13,14 @@ Logic and packet structure were ported from the [RepliShot](https://github.com/R
 3. [Setup & Running](#setup--running)
 4. [Overlay Display](#overlay-display)
 5. [Tuning Editor](#tuning-editor)
-6. [Data Flow Architecture](#data-flow-architecture)
-7. [HID Hardware Reference](#hid-hardware-reference)
-8. [Packet Format (60-byte HID Report)](#packet-format-60-byte-hid-report)
-9. [Physics & Tuning Reference](#physics--tuning-reference)
-10. [Simulation Mode](#simulation-mode)
-11. [Technical Gotchas](#technical-gotchas)
-12. [File Reference](#file-reference)
+6. [Manual Simulation Window](#manual-simulation-window)
+7. [Data Flow Architecture](#data-flow-architecture)
+8. [HID Hardware Reference](#hid-hardware-reference)
+9. [Packet Format (60-byte HID Report)](#packet-format-60-byte-hid-report)
+10. [Physics & Tuning Reference](#physics--tuning-reference)
+11. [Simulation Mode](#simulation-mode)
+12. [Technical Gotchas](#technical-gotchas)
+13. [File Reference](#file-reference)
 
 ---
 
@@ -125,8 +126,7 @@ A narrow floating window appears in the top-left corner of the screen when OptiS
 | Section | Content |
 |---|---|
 | Connection status | `● Connected` (green) or `◌ Simulation` (grey) |
-| Swing Speed slider | Visible in simulation mode only — scales simulated club speed 10–100% |
-| B / H indicators | Ball detection ON/OFF and Left/Right handed mode |
+| B / H indicators | Ball detection ON/OFF and Left/Right handed mode (color-coded: orange = RH, blue = LH) |
 | **Tuning button** | Opens the Tuning Editor window (same as `Ctrl+T`) |
 | Club name | Current club as reported by OpenGolfSim |
 | Metrics grid | Club Speed, Face Angle, Path, Contact, Smash Factor from last shot |
@@ -247,6 +247,59 @@ Club Head Speed (from sensor × Speed Calibration)
                                                                    (positive = fade/slice RH)
               BS ────────────────────────────────────────────────→ Total Spin (height / stopping power)
 ```
+
+---
+
+## Manual Simulation Window
+
+When no OptiShot hardware is detected, or if the device disconnects mid-session, OptiSender automatically opens the **Manual Simulation Window**. This window lets you specify exact shot parameters and feed them through the complete shot pipeline — identical to a real pad reading.
+
+### When it appears
+
+| Condition | Behaviour |
+|---|---|
+| No USB device found at startup | Window opens automatically alongside the overlay |
+| Device disconnects mid-session | Window opens automatically; closes when the device reconnects |
+| Device reconnects | Window closes automatically; hardware mode resumes |
+
+The window cannot be closed manually — it is tied to the hardware detection state.
+
+### Controls
+
+| Control | Description |
+|---|---|
+| **Send Shot** | Generates a precise HID packet from the current slider values and sends it through the full pipeline (ShotProcessor → PhysicsEngine → Overlay → API) |
+| **Right Handed / Left Handed** | Handedness toggle — color-coded orange (RH) / blue (LH), synced with `Ctrl+H` and the overlay indicator |
+| **Club** | Select the club for this shot. Defaults to the club reported by OpenGolfSim; can be overridden independently for testing |
+| **Club Speed (mph)** | Target club head speed in miles per hour (10–120 mph) |
+| **Face Angle (°)** | Club face angle at impact in degrees. Sign convention: **positive = open** (face pointing away from golfer) for both RH and LH |
+| **Club Path (°)** | Club path direction at impact in degrees. Sign convention: **positive = in-to-out** (toward target side) for both RH and LH |
+
+### Sign conventions
+
+Both face angle and path follow the golfer's own frame of reference regardless of handedness:
+
+| Golfer | Positive face | Negative face | Positive path | Negative path |
+|---|---|---|---|---|
+| **Right-handed** | Open — pointing right | Closed — pointing left | In-to-out — left to right | Out-to-in — right to left |
+| **Left-handed** | Open — pointing left | Closed — pointing right | In-to-out — right to left | Out-to-in — left to right |
+
+The handedness conversion is applied internally before physics so the same face/path values produce the same ball flight for a RH and LH golfer when their inputs are sign-equivalent.
+
+### Ready state
+
+The **Send Shot** button is disabled (grey) after a shot is sent and shows `◌ Processing…` until the system is ready for the next shot:
+
+- **Primary trigger:** OpenGolfSim sends a `result` message back (shot has been processed and displayed in-game). Ready is signalled 5 seconds after the result to allow the game screen to fully update.
+- **Fallback timer:** If the API is not connected or does not respond, the button re-enables automatically after 12 seconds — matching the time needed for the game engine to cycle.
+
+This prevents shots from being sent before the simulator is ready to receive them, mirroring the green LED behaviour of the physical pad.
+
+### How it relates to random simulation
+
+`Ctrl+Space` / `Ctrl+S` still triggers a **random** simulated swing using a weighted shot profile (straight, fade, draw, etc.) at the club's default speed range. The Manual Simulation Window is the precise alternative — every parameter is exact, no randomness is applied.
+
+Both paths produce structurally identical HID packets and run through the same `ShotProcessor → PhysicsEngine → API` pipeline.
 
 ---
 
@@ -466,16 +519,22 @@ ball_speed = club_speed * (BallSpeed - contact_penalty)
 
 ## Simulation Mode
 
-Activated automatically when no HID device is found.
+Activated automatically when no HID device is found. Two sub-modes are available:
 
-`simulation.py → generate_simulated_shot(club_name)` synthesizes a valid 60-byte packet by:
+### Manual Simulation Window (primary)
 
-1. Picking a club speed within the club's speed range, scaled by the overlay swing-speed slider (10–100%).
-2. Selecting a random shot profile (straight, fade, draw, slice, hook, toe, heel) with weighted probabilities.
-3. Encoding the target face angle and path as LED bitmasks and timing ticks.
-4. Running the result through the same `ShotProcessor` pipeline as real hardware.
+See [Manual Simulation Window](#manual-simulation-window) above. Provides precise control over every shot parameter.
 
-The resulting packet is structurally identical to hardware output and passes through the full pipeline unchanged — simulation is a faithful integration test of the complete data flow.
+### Random shot trigger (keyboard)
+
+`Ctrl+Space` or `Ctrl+S` fires a randomised shot via `generate_simulated_shot(club_name)`:
+
+1. Selects a random shot profile (straight, fade, draw, slice, hook, toe, heel) with weighted probabilities.
+2. Picks a club speed within the club's natural range.
+3. Encodes the target face angle and path as LED bitmasks and timing ticks using the same inverse formula as the Manual Simulation Window.
+4. Passes the result through the identical `ShotProcessor → PhysicsEngine → API` pipeline as real hardware.
+
+The resulting packet is structurally identical to hardware output — simulation is a faithful integration test of the complete data flow.
 
 ---
 
@@ -496,8 +555,8 @@ If you run OptiSender and the official OptiShot software at the same time, both 
 ### 3. Duplicate packet guard is byte-exact
 `OptiFilter.is_duplicate` does a full 60-byte equality check. The OptiShot hardware can re-deliver the same packet on subsequent reads before the next swing. If shots are being silently dropped, verify the filter isn't matching near-identical but distinct packets.
 
-### 4. Two Tk windows share one event loop
-The overlay display (`overlay_display.py`) and the Tuning Editor (`tuning_editor.py`) both run inside a single `Tk()` instance — the editor opens as a `Toplevel` child of the overlay's root. This avoids the Python 3.13 restriction against multiple `Tk()` instances in different threads. All UI scheduling is done via `overlay.schedule_ui()` which posts callables onto the overlay's Tk event loop.
+### 4. Three Tk windows share one event loop
+The overlay display (`overlay_display.py`), the Tuning Editor (`tuning_editor.py`), and the Manual Simulation Window (`simulation.py`) all run inside a single `Tk()` instance — each opens as a `Toplevel` child of the overlay's root. This avoids the Python 3.13 restriction against multiple `Tk()` instances in different threads. All UI scheduling is done via `overlay.schedule_ui()` which posts callables onto the overlay's Tk event loop.
 
 ### 5. Physics reloads on tuning save
 When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (a `threading.Event`). The main OptiSender loop checks this flag each iteration and recreates `PhysicsEngine()`, which re-reads `tuning.json`. The reload happens within one loop cycle (≤10 ms) of the save.
@@ -513,7 +572,7 @@ When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (
 | [data_filters.py](data_filters.py) | Duplicate and validity filters before processing |
 | [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact |
 | [ballphysics.py](ballphysics.py) | Ball-flight physics engine; tanh face compression; reads `tuning.json` |
-| [simulation.py](simulation.py) | Synthetic packet generator; weighted shot profiles; speed-pct scaling |
+| [simulation.py](simulation.py) | `generate_from_metrics()` — precise HID packet from exact inputs; `generate_simulated_shot()` — weighted random profiles; `SimulationWindow` — manual simulation GUI |
 | [overlay_display.py](overlay_display.py) | Floating metrics overlay; Tk daemon thread; Tuning button |
 | [tuning_editor.py](tuning_editor.py) | Real-time tuning GUI; per-club sliders; save/cancel/revert |
 | [tuning.json](tuning.json) | Active tuning — per-club smash factor, launch angle, spin, global calibration |
