@@ -48,6 +48,7 @@ class OverlayDisplay:
         self._root.geometry(f"{WIDTH}x560+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
+        self._left_handed = False
         self._drag_x = 0
         self._drag_y = 0
 
@@ -165,7 +166,8 @@ class OverlayDisplay:
             text="ON" if using_ball else "OFF",
             fg=ON_COLOR if using_ball else OFF_COLOR
         )
-        left_handed = s.get("left_handed", False)
+        left_handed = s.get("left_handed", self._left_handed)
+        self._left_handed = left_handed
         self._hand_lbl.config(
             text="LH" if left_handed else "RH",
             fg="#1565c0" if left_handed else "#f57c00"
@@ -180,8 +182,32 @@ class OverlayDisplay:
         for key in ("club_speed", "face_angle", "swing_path", "face_contact", "smash_factor"):
             value = s.get(key)
             if key in self._vars and value is not None:
+                if self._left_handed:
+                    value = self._flip_for_lh(key, value)
                 var, unit = self._vars[key]
                 var.set(f"{value}{unit}" if unit else str(value))
+
+    _CONTACT_FLIP = {
+        "Toe": "Heel", "Heel": "Toe",
+        "Extreme Toe": "Extreme Heel", "Extreme Heel": "Extreme Toe",
+        "Far Toe": "Far Heel", "Far Heel": "Far Toe",
+    }
+
+    def _flip_for_lh(self, key, value):
+        if key == "face_angle":
+            if value.startswith("Open"):
+                return value.replace("Open", "Closed", 1)
+            if value.startswith("Closed"):
+                return value.replace("Closed", "Open", 1)
+        elif key == "swing_path":
+            try:
+                num = float(value.replace("°", "").replace("+", ""))
+                return f"{-num:+.1f}°"
+            except ValueError:
+                pass
+        elif key == "face_contact":
+            return self._CONTACT_FLIP.get(value, value)
+        return value
 
     def _handle_tuning_click(self):
         if self._sim_input:

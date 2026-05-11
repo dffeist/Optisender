@@ -39,10 +39,10 @@ class PhysicsEngine:
         k = self.params.get("FaceCompression", {}).get("k", 15.0)
         return k * math.tanh(face_angle / k)
 
-    def calculate_ball_flight(self, metrics, club_name, left_handed=False):
+    def calculate_ball_flight(self, metrics, club_name):
         """
         Calculates ball flight based on metrics dictionary from ShotProcessor.
-        left_handed flips face_angle and path signs so physics are correct for LH players.
+        Assumes right-handed golfer conventions throughout.
         """
         ball = BallFlight()
 
@@ -50,16 +50,10 @@ class PhysicsEngine:
         club_speed   = metrics.get('speed', 0.0)
         face_contact = metrics.get('contact', 0.0)
 
-        # Raw sensor face angle is physically inverted for both hands (atan geometry
-        # runs opposite to Trackman convention). Negate unconditionally.
+        # Raw sensor face angle is physically inverted (atan geometry runs opposite
+        # to Trackman convention). Negate unconditionally.
         face_angle = metrics.get('face_angle', 0.0) * -1
         path       = metrics.get('path_deg', 0.0)
-
-        # Mirror both inputs for LH so physics sees the equivalent RH swing.
-        # A LH open face (+sensor) is a RH closed face (−sensor) — same ball flight.
-        if left_handed:
-            face_angle = -face_angle
-            path       = -path
 
         club_params = self.params.get(club_name, self.params.get("Driver"))
 

@@ -292,137 +292,136 @@ def main():
 
             # Get Swing Data
             data           = None
+            direct_metrics = None
             shot_club      = user_club  # may be overridden by sim window packet
             skip_dup_check = False
             if not simulation_mode:
                 data = reader.read_raw()
             else:
-                # Manual simulation window packet (precise metrics → exact HID packet)
+                # Manual simulation window packet — direct metrics injection (no HID round-trip)
                 try:
-                    item           = sim_packet_queue.get_nowait()
-                    data           = item["data"]
-                    shot_club      = item["club"]
+                    item      = sim_packet_queue.get_nowait()
+                    shot_club = item["club"]
                     skip_dup_check = True  # every button press is intentional
+                    if "metrics" in item:
+                        direct_metrics = item["metrics"]
+                    else:
+                        data = item["data"]
                 except queue.Empty:
                     pass
-                # Keyboard random-shot trigger (Ctrl+Space / Ctrl+S)
-                if data is None and sim_input["trigger"]:
+                # Keyboard random-shot trigger (Ctrl+Space / Ctrl+S) — still uses HID path
+                if data is None and direct_metrics is None and sim_input["trigger"]:
                     print("\n[SIMULATION] Triggering random simulated swing...")
                     data = simulation.generate_simulated_shot(user_club)
                     sim_input["trigger"] = False
 
-            if data:
-                # Duplicate filter applies to hardware and keyboard triggers only —
-                # manual sim window packets are always intentional.
+            if direct_metrics is not None:
+                print(f"--- Valid Swing Detected ---")
+                metrics = direct_metrics
+            elif data:
+                # Duplicate filter applies to hardware and keyboard triggers only.
                 if not skip_dup_check and filters.is_duplicate(data):
                     continue
                 if not filters.is_valid_swing(data):
                     continue
-
                 print(f"--- Valid Swing Detected ---")
                 metrics = processor.process_raw_buffer(data, using_ball=using_ball)
+            else:
+                metrics = None
 
-                if metrics:
-                    ball = physics.calculate_ball_flight(metrics, shot_club, left_handed=left_handed)
+            if metrics:
+                ball = physics.calculate_ball_flight(metrics, shot_club)
 
-                    path_val = metrics['path_deg']
-                    eff_path = path_val
+                path_val = metrics['path_deg']
+                eff_path = path_val
 
-                    # Sensor output is inverted from Trackman for both RH and LH — negate for label.
-                    face = metrics['face_angle']
-                    eff_face = -face
-                    if eff_face > 0.5:
-                        face_label = f"Open {abs(face):.1f}°"
-                    elif eff_face < -0.5:
-                        face_label = f"Closed {abs(face):.1f}°"
-                    else:
-                        face_label = f"Square {abs(face):.1f}°"
+                # Sensor output is inverted from Trackman for both RH and LH — negate for label.
+                face = metrics['face_angle']
+                eff_face = -face
+                if eff_face > 0.5:
+                    face_label = f"Open {abs(face):.1f}°"
+                elif eff_face < -0.5:
+                    face_label = f"Closed {abs(face):.1f}°"
+                else:
+                    face_label = f"Square {abs(face):.1f}°"
 
-                    # Derive face contact label
-                    # For LH: toe/heel are physically reversed on the sensor
-                    min_b = metrics['raw_min_back']
-                    max_b = metrics['raw_max_back']
-                    if max_b == 0:   contact_label = "Missed"
-                    elif left_handed:
-                        if max_b <= 2: contact_label = "Extreme Heel"
-                        elif max_b == 3: contact_label = "Heel"
-                        elif min_b >= 5: contact_label = "Far Toe"
-                        elif min_b == 4: contact_label = "Toe"
-                        else:            contact_label = "Center"
-                    else:
-                        if max_b <= 2: contact_label = "Extreme Toe"
-                        elif max_b == 3: contact_label = "Toe"
-                        elif min_b >= 5: contact_label = "Far Heel"
-                        elif min_b == 4: contact_label = "Heel"
-                        else:            contact_label = "Center"
+                # Derive face contact label
+                min_b = metrics['raw_min_back']
+                max_b = metrics['raw_max_back']
+                if max_b == 0:   contact_label = "Missed"
+                elif max_b <= 2: contact_label = "Extreme Toe"
+                elif max_b == 3: contact_label = "Toe"
+                elif min_b >= 5: contact_label = "Far Heel"
+                elif min_b == 4: contact_label = "Heel"
+                else:            contact_label = "Center"
 
-                    # Spin axis is already in world-space convention after physics fix.
-                    axis = ball.spin_axis
-                    eff_axis = axis
-                    if eff_axis > 10:    shape_label = "Slice"
-                    elif eff_axis > 3:   shape_label = "Fade"
-                    elif eff_axis > -3:  shape_label = "Straight"
-                    elif eff_axis > -10: shape_label = "Draw"
-                    else:                shape_label = "Hook"
+                # Spin axis is already in world-space convention after physics fix.
+                axis = ball.spin_axis
+                eff_axis = axis
+                if eff_axis > 10:    shape_label = "Slice"
+                elif eff_axis > 3:   shape_label = "Fade"
+                elif eff_axis > -3:  shape_label = "Straight"
+                elif eff_axis > -10: shape_label = "Draw"
+                else:                shape_label = "Hook"
 
-                    source = 'SIMULATED' if simulation_mode else 'OptiShot'
-                    hand_label = 'LH' if left_handed else 'RH'
-                    W = 38
-                    print("\n" + "=" * W)
-                    print(f"  CLUB: {shot_club}  [{source}] [{hand_label}]")
-                    print("=" * W)
-                    print(f"  {'CLUB METRICS':}")
-                    print(f"    Club Speed  : {metrics['speed']:.1f} mph")
-                    print(f"    Face Angle  : {face_label}")
-                    print(f"    Swing Path  : {eff_path:+.1f}°")
-                    print(f"    Face Contact: {contact_label}")
-                    real_smash = (ball.ball_speed / metrics['speed']) if metrics['speed'] > 0 else 0.0
-                    print(f"    Smash Factor: {real_smash:.2f}")
-                    print("-" * W)
-                    print(f"  {'BALL FLIGHT':}")
-                    print(f"    Ball Speed  : {ball.ball_speed:.1f} mph")
-                    print(f"    Launch (V)  : {ball.launch_angle:.1f}°")
-                    print(f"    Launch (H)  : {ball.launch_direction:+.1f}°")
-                    print(f"    Total Spin  : {ball.total_spin:.0f} rpm")
-                    print(f"    Spin Axis   : {ball.spin_axis:+.1f}°")
-                    print(f"    Shot Shape  : {shape_label}")
-                    print("=" * W + "\n")
+                source = 'SIMULATED' if simulation_mode else 'OptiShot'
+                hand_label = 'LH' if left_handed else 'RH'
+                W = 38
+                print("\n" + "=" * W)
+                print(f"  CLUB: {shot_club}  [{source}] [{hand_label}]")
+                print("=" * W)
+                print(f"  {'CLUB METRICS':}")
+                print(f"    Club Speed  : {metrics['speed']:.1f} mph")
+                print(f"    Face Angle  : {face_label}")
+                print(f"    Swing Path  : {eff_path:+.1f}°")
+                print(f"    Face Contact: {contact_label}")
+                real_smash = (ball.ball_speed / metrics['speed']) if metrics['speed'] > 0 else 0.0
+                print(f"    Smash Factor: {real_smash:.2f}")
+                print("-" * W)
+                print(f"  {'BALL FLIGHT':}")
+                print(f"    Ball Speed  : {ball.ball_speed:.1f} mph")
+                print(f"    Launch (V)  : {ball.launch_angle:.1f}°")
+                print(f"    Launch (H)  : {ball.launch_direction:+.1f}°")
+                print(f"    Total Spin  : {ball.total_spin:.0f} rpm")
+                print(f"    Spin Axis   : {ball.spin_axis:+.1f}°")
+                print(f"    Shot Shape  : {shape_label}")
+                print("=" * W + "\n")
 
-                    overlay.push_state({
-                        "using_ball":   using_ball,
-                        "left_handed":  left_handed,
-                        "club":         shot_club,
-                        "source":       source,
-                        "hand_label":   hand_label,
-                        "club_speed":   f"{metrics['speed']:.1f}",
-                        "face_angle":   face_label,
-                        "swing_path":   f"{eff_path:+.1f}°",
-                        "face_contact": contact_label,
-                        "smash_factor": f"{real_smash:.2f}",
-                        "ball_speed":   f"{ball.ball_speed:.1f}",
-                        "launch_v":     f"{ball.launch_angle:.1f}",
-                        "launch_h":     f"{ball.launch_direction:+.1f}",
-                        "total_spin":   f"{ball.total_spin:.0f}",
-                        "spin_axis":    f"{ball.spin_axis:+.1f}",
-                        "shot_shape":   shape_label,
-                    })
-                    
-                    if api_socket:
-                        payload = {
-                            "type": "shot",
-                            "shot": {
-                                "ballSpeed": ball.ball_speed,
-                                "verticalLaunchAngle": ball.launch_angle,
-                                "horizontalLaunchAngle": ball.launch_direction,
-                                "spinSpeed": ball.total_spin,
-                                "spinAxis": ball.spin_axis
-                            }
+                overlay.push_state({
+                    "using_ball":   using_ball,
+                    "left_handed":  left_handed,
+                    "club":         shot_club,
+                    "source":       source,
+                    "hand_label":   hand_label,
+                    "club_speed":   f"{metrics['speed']:.1f}",
+                    "face_angle":   face_label,
+                    "swing_path":   f"{eff_path:+.1f}°",
+                    "face_contact": contact_label,
+                    "smash_factor": f"{real_smash:.2f}",
+                    "ball_speed":   f"{ball.ball_speed:.1f}",
+                    "launch_v":     f"{ball.launch_angle:.1f}",
+                    "launch_h":     f"{ball.launch_direction:+.1f}",
+                    "total_spin":   f"{ball.total_spin:.0f}",
+                    "spin_axis":    f"{ball.spin_axis:+.1f}",
+                    "shot_shape":   shape_label,
+                })
+
+                if api_socket:
+                    payload = {
+                        "type": "shot",
+                        "shot": {
+                            "ballSpeed": ball.ball_speed,
+                            "verticalLaunchAngle": ball.launch_angle,
+                            "horizontalLaunchAngle": ball.launch_direction,
+                            "spinSpeed": ball.total_spin,
+                            "spinAxis": ball.spin_axis
                         }
-                        try:
-                            api_socket.sendall(json.dumps(payload).encode('utf-8'))
-                            print(">> Shot data sent to API.")
-                        except Exception as e:
-                            print(f"Error sending to API: {e}")
+                    }
+                    try:
+                        api_socket.sendall(json.dumps(payload).encode('utf-8'))
+                        print(">> Shot data sent to API.")
+                    except Exception as e:
+                        print(f"Error sending to API: {e}")
                 
                 # Device LED Feedback Loop
                 if not simulation_mode:

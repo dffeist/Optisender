@@ -94,10 +94,14 @@ def generate_from_metrics(speed, face_angle, path_deg, club_name="Driver", verbo
         b_min_B = b_min_A + 1 if b_min_A < 7 else b_min_A - 1
     b_min_B = max(0, min(7, b_min_B))
 
-    # Path → front LED position
-    # Inverse of: path_deg = atan2((f - b) * LED_SPACING, SENSOR_SPACING)
-    path_offset = round(math.tan(math.radians(path_deg)) * SENSOR_SPACING / LED_SPACING)
-    f_min = max(0, min(7, b_min_A + path_offset))
+    # Path → front LED position.
+    # The back centroid is determined by both back packets (0x81 and 0x52), not b_min_A alone.
+    # Use the actual decoded centroid as the reference so ±path encodes symmetrically.
+    actual_back_min = min(b_min_A, b_min_B)
+    actual_back_max = max(b_min_A + 1, b_min_B + 1)
+    centroid_back_led = (actual_back_min + actual_back_max) / 2.0
+    target_front_led  = centroid_back_led + math.tan(math.radians(path_deg)) * SENSOR_SPACING / LED_SPACING
+    f_min = max(0, min(7, round(target_front_led - 0.5)))
 
     # Back timing encodes face angle magnitude (weighted-average formula uses *1.5)
     target_back_angle = encode_face * 1.5
@@ -291,8 +295,8 @@ class SimulationWindow:
         self._path_var  = tk.DoubleVar(master=win, value=0.0)
 
         self._make_slider(win, "Club Speed (mph)", self._speed_var,  10,      120,      0.5, pad)
-        self._make_slider(win, "Face Angle (°)",   self._face_var,  -20,       20,      0.5, pad)
-        self._make_slider(win, "Club Path (°)",    self._path_var,  PATH_MIN, PATH_MAX, 0.5, pad)
+        self._make_slider(win, "Face Angle (°)",   self._face_var,  -20,       20,      1.0, pad)
+        self._make_slider(win, "Club Path (°)",    self._path_var,  PATH_MIN, PATH_MAX, 1.0, pad)
 
         # Status / ready indicator
         self._status_var = tk.StringVar(master=win, value="")
@@ -349,7 +353,23 @@ class SimulationWindow:
         face_angle = self._face_var.get()
         path_deg   = self._path_var.get()
         club       = self._club
-        data       = generate_from_metrics(speed, face_angle, path_deg, club)
+
+        # Sensor convention: face_angle in metrics is physically inverted from Trackman.
+        # LH also flips sign so physics and overlay labelling stay consistent.
+        sensor_face = face_angle  if self._left_handed else -face_angle
+        sensor_path = -path_deg   if self._left_handed else  path_deg
+
+        metrics = {
+            "speed":        speed,
+            "face_angle":   sensor_face,
+            "path_deg":     sensor_path,
+            "contact":      0.0,
+            "raw_min_back": 3,
+            "raw_max_back": 4,
+            "path":         0,
+            "smash_factor": 1.0,
+        }
+
         self.ready.clear()
         self._send_btn.config(state="disabled", bg="#555555")
         self._status_lbl.config(fg="#ffa726")
@@ -358,7 +378,7 @@ class SimulationWindow:
             f"◌ Processing [{hand}] {club}  Speed={speed:.1f}  "
             f"Face={face_angle:+.1f}°  Path={path_deg:+.1f}°"
         )
-        self._queue.put({"data": data, "club": club})
+        self._queue.put({"metrics": metrics, "club": club})
 
     # ── Window drag ───────────────────────────────────────────────────────
 
