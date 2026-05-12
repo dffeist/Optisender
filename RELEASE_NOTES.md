@@ -1,3 +1,77 @@
+# OptiSender v1.0.0a6 — Release Notes
+
+## What's New since v1.0.0a5
+
+### RH-Only Physics — Handedness is Now Display-Only
+
+The physics engine has been simplified to right-handed conventions throughout. Left-handed mode now affects only how values are **labeled** in the overlay — the underlying ball flight math is identical for both golfers.
+
+- Removed `left_handed` parameter from `PhysicsEngine.calculate_ball_flight()` — LH sign-flip block deleted
+- `Ctrl+H` and the simulation window handedness toggle still work, but they control the overlay display labels only
+- Deleted `verify_handedness.py` (development diagnostic, no longer needed)
+
+### Overlay LH Label Flipping
+
+When Left-Handed mode is active, the overlay now re-labels sensor values to match the golfer's frame of reference without altering the physics output:
+
+| Metric | RH display | LH display |
+|---|---|---|
+| Face Angle | Open / Closed as computed | Open ↔ Closed swapped |
+| Club Path | `+` = in-to-out | Sign negated (`+` = in-to-out from LH perspective) |
+| Face Contact | Toe / Heel as computed | Toe ↔ Heel swapped |
+
+New `_flip_for_lh()` method and `_CONTACT_FLIP` lookup dict added to `overlay_display.py`.
+
+### Manual Simulation — Direct Metrics Injection
+
+The Manual Simulation Window no longer encodes slider values into a synthetic 60-byte HID packet. Instead it builds a metrics dict directly and injects it into the physics engine, bypassing `generate_from_metrics()` and `ShotProcessor` entirely.
+
+**Why this matters:** The HID round-trip introduced LED quantization errors (~26% face angle underread, ±2.3° path bias at zero input) that could not be corrected without physical hardware specifications. Direct injection eliminates these artifacts:
+
+- Face = 0°, Path = 0° now produces exactly 0° HLA and "Straight" shape — no offset
+- Face = +5° Open now reaches the physics engine as exactly +5° Open, not ~3.7°
+- Path = +10° in-to-out now displays as exactly +10°, not +11.5° or +6.9°
+
+The physical pad pipeline (`ShotProcessor` → `PhysicsEngine`) is completely unchanged. The two paths are mutually exclusive — hardware data always goes through `ShotProcessor`.
+
+**LH sign convention in direct injection:**
+
+| Slider input | RH sensor value | LH sensor value |
+|---|---|---|
+| Face = +5° Open | `face_angle = −5.0` (sensor inverted) | `face_angle = +5.0` |
+| Path = +10° in-to-out | `path_deg = +10.0` | `path_deg = −10.0` |
+
+`Ctrl+Space` / `Ctrl+S` random shots still use the HID packet path (`generate_from_metrics()`) and are unaffected.
+
+### Path Encoding Centroid Fix (`generate_from_metrics`)
+
+The front LED (`f_min`) target in `generate_from_metrics()` was computed relative to an incorrectly centered back LED reference, causing asymmetric path encoding (RH and LH paths of equal magnitude encoded differently). The formula now uses the actual centroid of both back sensor rows (`b_min_A` and `b_min_B`) as the reference point, producing symmetric path encoding for random shot profiles.
+
+### Slider Resolution Updates
+
+Both the Manual Simulation Window and `test.py` manual tester now use 1° steps for all angular sliders:
+
+| Slider | Previous step | New step |
+|---|---|---|
+| Face Angle | 0.5° | 1.0° |
+| Club Path | 0.5° | 1.0° |
+
+---
+
+## Files Changed since v1.0.0a5
+
+| File | Change |
+|---|---|
+| `ballphysics.py` | Removed `left_handed` parameter; deleted LH sign-flip block |
+| `OptiSender.py` | Direct metrics injection branch (`"metrics"` key in sim queue); `left_handed` flag retained for display only; removed `left_handed=` from physics call; simplified contact label (RH-only) |
+| `overlay_display.py` | Added `_flip_for_lh()`, `_CONTACT_FLIP`; LH label flipping for face angle, path, and contact |
+| `simulation.py` | `_send()` rewritten for direct metrics injection; `generate_from_metrics()` path centroid fix; face and path slider resolution changed to 1.0° |
+| `test.py` | Removed LH toggle and `_toggle_handed()`; face and path slider resolution changed to 1.0°; `resolution` parameter added to `_make_slider()` |
+| `verify_handedness.py` | Deleted |
+| `README.md` | Updated for v1.0.0a6 — manual simulation section, architecture diagram, sign convention note, file reference |
+
+---
+
 # OptiSender v1.0.0a5 — Release Notes
 
 ## What's New since v1.0.0a4

@@ -268,7 +268,7 @@ The window cannot be closed manually — it is tied to the hardware detection st
 
 | Control | Description |
 |---|---|
-| **Send Shot** | Generates a precise HID packet from the current slider values and sends it through the full pipeline (ShotProcessor → PhysicsEngine → Overlay → API) |
+| **Send Shot** | Builds a metrics dict directly from the current slider values and injects it into the physics engine (PhysicsEngine → Overlay → API). Does **not** generate a HID packet — no LED quantization or encoding error is introduced |
 | **Right Handed / Left Handed** | Handedness toggle — color-coded orange (RH) / blue (LH), synced with `Ctrl+H` and the overlay indicator |
 | **Club** | Select the club for this shot. Defaults to the club reported by OpenGolfSim; can be overridden independently for testing |
 | **Club Speed (mph)** | Target club head speed in miles per hour (10–120 mph) |
@@ -299,7 +299,7 @@ This prevents shots from being sent before the simulator is ready to receive the
 
 `Ctrl+Space` / `Ctrl+S` still triggers a **random** simulated swing using a weighted shot profile (straight, fade, draw, etc.) at the club's default speed range. The Manual Simulation Window is the precise alternative — every parameter is exact, no randomness is applied.
 
-Both paths produce structurally identical HID packets and run through the same `ShotProcessor → PhysicsEngine → API` pipeline.
+The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl+Space` / `Ctrl+S` random shots still encode a HID packet and run through `ShotProcessor → PhysicsEngine → API`.
 
 ---
 
@@ -369,7 +369,7 @@ Both paths produce structurally identical HID packets and run through the same `
 │  Sign convention (Trackman):                            │
 │    face_angle > 0 = open / pointing right (RH)         │
 │    path > 0       = in-to-out / rightward (RH)         │
-│    Left-handed: both values sign-flipped before physics │
+│    Physics is RH-only; LH affects overlay labels only   │
 │                                                         │
 │  eff_face = k × tanh(face_angle / k)   [compression]   │
 │                                                         │
@@ -502,7 +502,7 @@ All per-club constants live in [tuning.json](tuning.json). The [Tuning Editor](#
 | `path_deg` | In-to-out — club traveling right (RH) | Out-to-in — club traveling left (RH) |
 | `spin_axis` | Fade / slice (RH) | Draw / hook (RH) |
 
-For left-handed players both `face_angle` and `path_deg` are sign-flipped before physics so the same formulas apply.
+Physics is right-handed only. For left-handed players the overlay re-labels face angle (Open↔Closed), path sign, and contact (Toe↔Heel) — the physics output and API payload are unchanged.
 
 ### Contact penalty
 
@@ -531,10 +531,10 @@ See [Manual Simulation Window](#manual-simulation-window) above. Provides precis
 
 1. Selects a random shot profile (straight, fade, draw, slice, hook, toe, heel) with weighted probabilities.
 2. Picks a club speed within the club's natural range.
-3. Encodes the target face angle and path as LED bitmasks and timing ticks using the same inverse formula as the Manual Simulation Window.
-4. Passes the result through the identical `ShotProcessor → PhysicsEngine → API` pipeline as real hardware.
+3. Encodes the target face angle and path as LED bitmasks and timing ticks via `generate_from_metrics()`.
+4. Passes the result through `ShotProcessor → PhysicsEngine → API` — the same pipeline as real hardware.
 
-The resulting packet is structurally identical to hardware output — simulation is a faithful integration test of the complete data flow.
+The resulting packet is structurally identical to hardware output — random simulation is a faithful integration test of the HID decode pipeline.
 
 ---
 
@@ -572,7 +572,7 @@ When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (
 | [data_filters.py](data_filters.py) | Duplicate and validity filters before processing |
 | [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact |
 | [ballphysics.py](ballphysics.py) | Ball-flight physics engine; tanh face compression; reads `tuning.json` |
-| [simulation.py](simulation.py) | `generate_from_metrics()` — precise HID packet from exact inputs; `generate_simulated_shot()` — weighted random profiles; `SimulationWindow` — manual simulation GUI |
+| [simulation.py](simulation.py) | `generate_from_metrics()` — HID packet for random shot profiles; `generate_simulated_shot()` — weighted random profiles; `SimulationWindow` — manual simulation GUI (direct metrics injection, no HID encoding) |
 | [overlay_display.py](overlay_display.py) | Floating metrics overlay; Tk daemon thread; Tuning button |
 | [tuning_editor.py](tuning_editor.py) | Real-time tuning GUI; per-club sliders; save/cancel/revert |
 | [tuning.json](tuning.json) | Active tuning — per-club smash factor, launch angle, spin, global calibration |
