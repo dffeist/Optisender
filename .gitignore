@@ -25,3 +25,6 @@ verify_handedness.py
 .vscode/
 .idea/
 *.swp
+
+# Credentials (never commit)
+DevEnvUserHome.git-credentials
