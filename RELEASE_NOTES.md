@@ -1,3 +1,103 @@
+# OptiSender v1.01 — Release Notes
+
+## What's New since v1.0.0a6
+
+### GSPro Connect Support — Send to OpenGolfSim, GSPro, or Both
+
+OptiSender can now send shots to **GSPro Connect (Open Connect v1)** as well as OpenGolfSim, either one at a time or both simultaneously. Each simulator has its own connection with an independent socket, reconnect timer, heartbeat and protocol, so a failure on one never affects the other.
+
+| Simulator | Default address | Role |
+|---|---|---|
+| OpenGolfSim | `127.0.0.1:3111` | Unchanged from earlier versions |
+| GSPro Connect | `127.0.0.1:921` | New — GSPro listens, OptiSender connects |
+
+OpenGolfSim remains the default. GSPro is off until you enable it, so existing installs behave exactly as before.
+
+### Overlay Target Selector
+
+The overlay has two new checkboxes, **OpenGolfSim** and **GSPro**, each with a connection dot:
+
+- **Checkbox** — send shots to that simulator or stop. Takes effect immediately, no restart. The choice is saved to `targets.json` automatically.
+- **Dot** — green = connected, orange = enabled but not connected yet, grey = off.
+- The overlay window is 60 px taller to fit the new rows.
+
+### `targets.json` — Target Configuration
+
+New config file, read at startup and rewritten when you tick a checkbox:
+
+```json
+{
+  "club_source": "any",
+  "opengolfsim": { "enabled": true,  "host": "127.0.0.1", "port": 3111 },
+  "gspro":       { "enabled": false, "host": "127.0.0.1", "port": 921,
+                   "device_id": "OptiSender", "send_club_data": true }
+}
+```
+
+- `club_source` — whose club selection drives OptiSender when both are connected: `"any"` (last update wins), `"opengolfsim"` or `"gspro"`.
+- `send_club_data` — set `false` to omit the `ClubData` block from GSPro shots.
+- If the file is missing or unreadable, defaults are used (OpenGolfSim only). It is created on the first checkbox change.
+- Like `tuning.json`, it lives **next to the exe** so the app can save it.
+
+### GSPro Shot Payload
+
+GSPro receives the Open Connect v1 format. Required envelope fields are generated automatically: `DeviceID` (`OptiSender`), `APIversion` (`"1"`), an incrementing `ShotNumber`, and `ShotDataOptions`.
+
+| GSPro field | OptiSender source |
+|---|---|
+| `BallData.Speed` | Ball speed |
+| `BallData.VLA` / `HLA` | Launch angle / launch direction |
+| `BallData.TotalSpin` / `SpinAxis` | Total spin / spin axis |
+| `ClubData.Speed`, `SpeedAtImpact` | Club speed |
+| `ClubData.Path` | Swing path |
+| `ClubData.FaceToTarget` | Face angle, sign flipped (sensor value is inverted; GSPro expects open = positive) |
+
+Not sent because the OptiShot sensor does not measure them: `CarryDistance`, `AngleOfAttack`, `Loft`, `Lie`, `VerticalFaceImpact`, `HorizontalFaceImpact`, `ClosureRate`. `BackSpin` and `SideSpin` are omitted since `TotalSpin` is sent.
+
+On connect, OptiSender sends a ready message. Incoming GSPro messages are handled by code: `200` shot received, `201` player information (club selection), `5xx` errors logged.
+
+A sample payload is in `JSON_Files/gspro_simulated_shot.json`.
+
+### Club Selection from GSPro
+
+GSPro club ids map directly to OptiSender club names (`7I`, `3W`, `5H`, `PW` …). `DR` maps to Driver, `PT` to Putter and `AW` to GW.
+
+Clubs GSPro can select that have no entry in `tuning.json` use the nearest tuned club. Previously an unknown club silently used Driver values.
+
+| GSPro club | Uses |
+|---|---|
+| `2W`, `4W` | `3W` |
+| `7W` | `5W` |
+| `2H`, `3H`, `4H` | `5H` |
+| `1I`, `2I` | `3I` |
+
+### Refactor — `api_targets.py`
+
+The single hard-wired OpenGolfSim socket in `OptiSender.py` (connect, heartbeat, receive, send) was replaced by a new `api_targets.py` module with one class per simulator. `API_IP` / `API_PORT` constants were removed from `OptiSender.py`; host and port now come from `targets.json`.
+
+### Known Limitations / Not Yet Verified
+
+- **Not tested against a live GSPro Connect.** The GSPro spec leaves several things unstated; the implementation was verified against local test servers only: message framing and encoding, whether a periodic heartbeat is required, and whether a partial `ClubData` block is accepted (use `send_club_data: false` if GSPro rejects shots).
+- GSPro club-id mapping and the `FaceToTarget` sign convention should be confirmed on a real setup.
+- Left-handed mode remains display-only (see v1.0.0a6); no handedness adjustment is applied to GSPro payloads.
+- A send that stalls on one simulator can still delay the shot loop for up to 2 seconds.
+- Toggling a target while the pad LED feedback delay (2.5 s) is running takes effect when it finishes.
+
+---
+
+## Files Changed since v1.0.0a6
+
+| File | Change |
+|---|---|
+| `api_targets.py` | New — OpenGolfSim and GSPro connection classes; `targets.json` load/save; club id mapping |
+| `targets.json` | New — target selection and addresses |
+| `OptiSender.py` | Single API socket replaced by a loop over targets; overlay target requests applied live; target status pushed to overlay |
+| `overlay_display.py` | OpenGolfSim / GSPro checkboxes and connection dots; window height 560 → 620 |
+| `JSON_Files/gspro_simulated_shot.json` | New — sample GSPro shot payload |
+| `README.md` | File table and Overlay section updated for the new module, config and controls |
+
+---
+
 # OptiSender v1.0.0a6 — Release Notes
 
 ## What's New since v1.0.0a5
