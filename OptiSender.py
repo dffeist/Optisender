@@ -1,7 +1,4 @@
 import time
-import socket
-import json
-import select
 try:
     from pynput import keyboard
 except ImportError:
@@ -18,9 +15,7 @@ from data_filters import OptiFilter
 from shot_processor import ShotProcessor
 from overlay_display import OverlayDisplay
 from tuning_editor import TuningEditor
-
-API_IP = "127.0.0.1"
-API_PORT = 3111
+from api_targets import load_targets_config, build_targets, save_targets_config
 
 CLUBS = ["Driver", "3W", "5W", "5H", "3I", "4I", "5I", "6I", "7I", "8I", "9I", "PW", "GW", "SW", "LW", "Putter"]
 
@@ -41,10 +36,11 @@ def main():
     print(f"Selected Club: {user_club}")
 
     simulation_mode = False
-    api_socket = None
-    api_buffer = ""
-    last_heartbeat_time = time.time()
-    last_connection_attempt = 0
+    targets_cfg = load_targets_config()
+    targets = build_targets(targets_cfg)
+    club_source = targets_cfg.get("club_source", "any")
+    print("API targets: " + (", ".join(f"{t.label} ({t.host}:{t.port})" for t in targets if t.enabled) or "none enabled"))
+    last_target_status = None
     last_keep_alive_time = time.time()
     last_reconnect_attempt = 0
     KEEP_ALIVE_INTERVAL = 30.0   # seconds between keep-alive pings
@@ -53,7 +49,8 @@ def main():
     
     # Simulation Input State
     sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False,
-                 "toggle_handed": False, "toggle_pin": False, "toggle_tuning": False}
+                 "toggle_handed": False, "toggle_pin": False, "toggle_tuning": False,
+                 "target_changes": queue.Queue()}
     using_ball = True
     left_handed = False
     print("Ball Mode: ON (press 'B' to toggle)")
@@ -111,25 +108,6 @@ def main():
     overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "club": user_club, "source": "Ready", "hand_label": "LH" if left_handed else "RH", "simulation_mode": simulation_mode})
     if simulation_mode:
         sim_window.show()
-
-    def try_api_connect():
-        nonlocal api_socket, last_connection_attempt
-        if api_socket is not None:
-            return
-        
-        now = time.time()
-        if now - last_connection_attempt < 5.0: # Retry every 5 seconds
-            return
-            
-        last_connection_attempt = now
-        try:
-            api_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            api_socket.settimeout(2.0)
-            api_socket.connect((API_IP, API_PORT))
-            print(f"SUCCESS: Connected to OpenGolfSim API at {API_IP}:{API_PORT}")
-            api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
-        except Exception:
-            api_socket = None
 
     # Enable keyboard listener
     if keyboard:
@@ -193,72 +171,45 @@ def main():
             #     print(f"*** MANUAL CLUB SELECT: {user_club} ***")
             #     overlay.push_state({"club": user_club, "source": "Manual", "hand_label": "LH" if left_handed else "RH"})
 
-            # Attempt API reconnection if offline
-            try_api_connect()
-
-            # Send Heartbeat every 0.5 seconds
-            if api_socket and (time.time() - last_heartbeat_time > 0.5):
+            # Apply target on/off requests from the overlay checkboxes
+            targets_changed = False
+            while True:
                 try:
-                    api_socket.sendall(json.dumps({"type": "device", "status": "ready"}).encode('utf-8'))
-                    last_heartbeat_time = time.time()
-                except Exception:
-                    print("API Heartbeat failed.")
-                    api_socket.close()
-                    api_socket = None
+                    tname, tflag = sim_input["target_changes"].get_nowait()
+                except queue.Empty:
+                    break
+                for target in targets:
+                    if target.name == tname:
+                        target.set_enabled(tflag)
+                        targets_changed = True
+                        print(f"*** {target.label}: {'ENABLED' if tflag else 'DISABLED'} ***")
+            if targets_changed:
+                save_targets_config(targets_cfg, targets)
 
-            # Check for incoming API messages
-            if api_socket:
-                try:
-                    readable, _, _ = select.select([api_socket], [], [], 0)
-                    if readable:
-                        new_data = api_socket.recv(4096).decode('utf-8')
-                        if new_data:
-                            api_buffer += new_data
-                            while api_buffer:
-                                api_buffer = api_buffer.lstrip()
-                                if not api_buffer: break
-                                try:
-                                    decoder = json.JSONDecoder()
-                                    msg_json, end_index = decoder.raw_decode(api_buffer)
-                                    if msg_json.get("status") != 200 and msg_json.get("code") != 200:
-                                        print(f"\n[API IN] {json.dumps(msg_json)}")
+            # Service each API target (reconnect, heartbeat, incoming messages)
+            for target in targets:
+                for event in target.poll():
+                    if event[0] == "club":
+                        if club_source not in ("any", target.name):
+                            continue
+                        new_club, cname = event[1], event[2]
+                        if new_club != user_club:
+                            user_club = new_club
+                            print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) [{target.label}] ***")
+                            overlay.push_state({"club": user_club, "source": "API", "hand_label": "LH" if left_handed else "RH"})
+                            sim_window.set_club(user_club)
+                    elif event[0] == "result":
+                        if sim_ready_timer is not None:
+                            sim_ready_timer.cancel()
+                        sim_ready_timer = threading.Timer(3.0, sim_window.set_ready)
+                        sim_ready_timer.daemon = True
+                        sim_ready_timer.start()
 
-                                    if msg_json.get("type") == "player":
-                                        club_data = msg_json.get("data", {}).get("club", {})
-                                        cid = club_data.get("id", "")
-                                        cname = club_data.get("name", "")
-                                        if cid:
-                                            if cid == "DR" or cid == "1W": new_club = "Driver"
-                                            elif cid == "PT": new_club = "Putter"
-                                            elif cid in ["AW", "UW"]: new_club = "GW"
-                                            else: new_club = cid 
-
-                                            if new_club != user_club:
-                                                user_club = new_club
-                                                print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) ***")
-                                                overlay.push_state({"club": user_club, "source": "API", "hand_label": "LH" if left_handed else "RH"})
-                                                sim_window.set_club(user_club)
-
-                                    elif msg_json.get("type") == "result":
-                                        res_data = msg_json.get("data", {}).get("result", {})
-                                        print(f"\n[API] SHOT RESULT: Carry: {res_data.get('carry', 0):.1f} | Total: {res_data.get('total', 0):.1f}")
-                                        if sim_ready_timer is not None:
-                                            sim_ready_timer.cancel()
-                                        sim_ready_timer = threading.Timer(3.0, sim_window.set_ready)
-                                        sim_ready_timer.daemon = True
-                                        sim_ready_timer.start()
-
-                                    api_buffer = api_buffer[end_index:]
-                                except json.JSONDecodeError:
-                                    break
-                        else:
-                            api_socket.close()
-                            api_socket = None
-                except Exception as e:
-                    print(f"API Receive Error: {e}")
-                    if api_socket: 
-                        api_socket.close()
-                        api_socket = None
+            # Keep the overlay's target lights current
+            target_status = {t.name: {"enabled": t.enabled, "status": t.status} for t in targets}
+            if target_status != last_target_status:
+                last_target_status = target_status
+                overlay.push_state({"targets": target_status})
 
             now = time.time()
 
@@ -406,23 +357,9 @@ def main():
                     "shot_shape":   shape_label,
                 })
 
-                if api_socket:
-                    payload = {
-                        "type": "shot",
-                        "shot": {
-                            "ballSpeed": ball.ball_speed,
-                            "verticalLaunchAngle": ball.launch_angle,
-                            "horizontalLaunchAngle": ball.launch_direction,
-                            "spinSpeed": ball.total_spin,
-                            "spinAxis": ball.spin_axis
-                        }
-                    }
-                    try:
-                        api_socket.sendall(json.dumps(payload).encode('utf-8'))
-                        print(">> Shot data sent to API.")
-                    except Exception as e:
-                        print(f"Error sending to API: {e}")
-                
+                for target in targets:
+                    target.send_shot(ball, metrics, shot_club)
+
                 # Device LED Feedback Loop
                 if not simulation_mode:
                     try:
@@ -454,8 +391,8 @@ def main():
                 reader.disconnect()
             except Exception:
                 pass
-        if api_socket:
-            api_socket.close()
+        for target in targets:
+            target.close()
         if listener:
             listener.stop()
 

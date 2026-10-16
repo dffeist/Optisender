@@ -1,0 +1,15 @@
+{
+  "club_source": "any",
+  "opengolfsim": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 3111
+  },
+  "gspro": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 921,
+    "device_id": "OptiSender",
+    "send_club_data": true
+  }
+}

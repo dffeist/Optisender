@@ -12,7 +12,9 @@ OFF_COLOR = "#ef5350"
 FONT_HDR  = ("Consolas", 20, "bold")
 FONT_VAL  = ("Consolas", 20)
 FONT_LBL  = ("Consolas", 18)
+WARN_COLOR = "#ffa726"
 WIDTH     = 160
+TARGET_ROWS = [("opengolfsim", "OpenGolfSim"), ("gspro", "GSPro")]
 
 
 class OverlayDisplay:
@@ -45,7 +47,7 @@ class OverlayDisplay:
         self._root.title("OptiSender")
         self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
-        self._root.geometry(f"{WIDTH}x560+13+27")
+        self._root.geometry(f"{WIDTH}x620+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
         self._left_handed = False
@@ -104,6 +106,24 @@ class OverlayDisplay:
         )
         self._tuning_btn.pack(fill="x", padx=5, pady=(0, 2))
 
+        # ── API targets (checkbox = send to that simulator; dot = connection) ──
+        self._target_vars = {}
+        self._target_dots = {}
+        for name, text in TARGET_ROWS:
+            row = tk.Frame(root, bg=BG)
+            row.pack(fill="x", padx=5, pady=0)
+            var = tk.BooleanVar(value=False)
+            self._target_vars[name] = var
+            tk.Checkbutton(
+                row, text=text, variable=var, bg=BG, fg=FG, selectcolor="#333333",
+                activebackground=BG, activeforeground=FG, font=("Consolas", 9),
+                anchor="w", cursor="hand2",
+                command=lambda n=name: self._handle_target_click(n)
+            ).pack(side="left")
+            dot = tk.Label(row, text="●", bg=BG, fg=DIM, font=("Consolas", 10, "bold"))
+            dot.pack(side="right")
+            self._target_dots[name] = dot
+
         _sep(root)
 
         # ── Club header ───────────────────────────────────────────────
@@ -153,6 +173,15 @@ class OverlayDisplay:
         if s.get("_toggle_pin"):
             self._toggle_pin()
             return
+
+        if "targets" in s:
+            colors = {"connected": ON_COLOR, "connecting": WARN_COLOR, "off": DIM}
+            for name, info in s["targets"].items():
+                if name in self._target_vars:
+                    self._target_vars[name].set(info["enabled"])
+                    self._target_dots[name].config(fg=colors.get(info["status"], DIM))
+            if len(s) == 1:
+                return
 
         if "simulation_mode" in s:
             sim = s["simulation_mode"]
@@ -212,6 +241,10 @@ class OverlayDisplay:
     def _handle_tuning_click(self):
         if self._sim_input:
             self._sim_input["toggle_tuning"] = True
+
+    def _handle_target_click(self, name):
+        if self._sim_input:
+            self._sim_input["target_changes"].put((name, self._target_vars[name].get()))
 
     def _toggle_pin(self):
         self._always_on_top = not self._always_on_top

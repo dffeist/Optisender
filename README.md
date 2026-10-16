@@ -128,8 +128,11 @@ A narrow floating window appears in the top-left corner of the screen when OptiS
 | Connection status | `● Connected` (green) or `◌ Simulation` (grey) |
 | B / H indicators | Ball detection ON/OFF and Left/Right handed mode (color-coded: orange = RH, blue = LH) |
 | **Tuning button** | Opens the Tuning Editor window (same as `Ctrl+T`) |
-| Club name | Current club as reported by OpenGolfSim |
+| **OpenGolfSim / GSPro checkboxes** | Tick to send shots to that simulator; untick to stop. Takes effect immediately and is saved to `targets.json`. The dot shows the connection: green = connected, orange = enabled but not connected yet, grey = off. Both can be on at once |
+| Club name | Current club as reported by the connected simulator(s) |
 | Metrics grid | Club Speed, Face Angle, Path, Contact, Smash Factor from last shot |
+
+GSPro club ids without a tuning entry (`2W`, `4W`, `7W`, `2H`, `3H`, `4H`, `1I`, `2I`) use the nearest tuned club (`3W`, `3W`, `5W`, `5H`, `5H`, `5H`, `3I`, `3I`).
 
 The overlay window can be dragged anywhere on screen. The **📌 pin button** in the title bar toggles always-on-top (`Ctrl+D`).
 
@@ -567,7 +570,9 @@ When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (
 
 | File | Role |
 |---|---|
-| [OptiSender.py](OptiSender.py) | Entry point; main loop, API socket, keyboard handler, physics reload |
+| [OptiSender.py](OptiSender.py) | Entry point; main loop, keyboard handler, physics reload |
+| [api_targets.py](api_targets.py) | Simulator connections — OpenGolfSim (port 3111) and GSPro Connect (port 921); per-target socket, reconnect, protocol; reads `targets.json` |
+| [targets.json](targets.json) | Which simulators to send to (`enabled`), host/port, and `club_source` (whose club selection drives OptiSender). Defaults to OpenGolfSim only |
 | [opti_reader.py](opti_reader.py) | HID device open/close, command writes, raw 60-byte reads |
 | [data_filters.py](data_filters.py) | Duplicate and validity filters before processing |
 | [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact |
