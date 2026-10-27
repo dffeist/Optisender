@@ -16,6 +16,7 @@ from ballphysics import PhysicsEngine
 from opti_reader import OptiReader
 from data_filters import OptiFilter
 from shot_processor import ShotProcessor
+from swing_labels import describe_swing
 from overlay_display import OverlayDisplay
 from tuning_editor import TuningEditor
 
@@ -161,7 +162,8 @@ def main():
                 sim_input["toggle_handed"] = False
                 left_handed = not left_handed
                 print(f"*** HANDEDNESS: {'Left-Handed' if left_handed else 'Right-Handed'} ***")
-                overlay.push_state({"using_ball": using_ball, "left_handed": left_handed})
+                # Labels name the swing for one hand, so the last shot is cleared rather than left stale.
+                overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "clear_shot": True})
                 sim_window.set_handed(left_handed)
 
             # Check for overlay pin toggle
@@ -312,7 +314,7 @@ def main():
                 # Keyboard random-shot trigger (Ctrl+Space / Ctrl+S) — still uses HID path
                 if data is None and direct_metrics is None and sim_input["trigger"]:
                     print("\n[SIMULATION] Triggering random simulated swing...")
-                    data = simulation.generate_simulated_shot(user_club)
+                    data = simulation.generate_simulated_shot(user_club, left_handed=left_handed)
                     sim_input["trigger"] = False
 
             if direct_metrics is not None:
@@ -332,37 +334,8 @@ def main():
             if metrics:
                 ball = physics.calculate_ball_flight(metrics, shot_club)
 
-                path_val = metrics['path_deg']
-                eff_path = path_val
-
-                # Sensor output is inverted from Trackman for both RH and LH — negate for label.
-                face = metrics['face_angle']
-                eff_face = -face
-                if eff_face > 0.5:
-                    face_label = f"Open {abs(face):.1f}°"
-                elif eff_face < -0.5:
-                    face_label = f"Closed {abs(face):.1f}°"
-                else:
-                    face_label = f"Square {abs(face):.1f}°"
-
-                # Derive face contact label
-                min_b = metrics['raw_min_back']
-                max_b = metrics['raw_max_back']
-                if max_b == 0:   contact_label = "Missed"
-                elif max_b <= 2: contact_label = "Extreme Toe"
-                elif max_b == 3: contact_label = "Toe"
-                elif min_b >= 5: contact_label = "Far Heel"
-                elif min_b == 4: contact_label = "Heel"
-                else:            contact_label = "Center"
-
-                # Spin axis is already in world-space convention after physics fix.
-                axis = ball.spin_axis
-                eff_axis = axis
-                if eff_axis > 10:    shape_label = "Slice"
-                elif eff_axis > 3:   shape_label = "Fade"
-                elif eff_axis > -3:  shape_label = "Straight"
-                elif eff_axis > -10: shape_label = "Draw"
-                else:                shape_label = "Hook"
+                # Physics is world-frame; labels shown to the golfer are built once for console and overlay.
+                labels = describe_swing(metrics, ball, left_handed)
 
                 source = 'SIMULATED' if simulation_mode else 'OptiShot'
                 hand_label = 'LH' if left_handed else 'RH'
@@ -372,9 +345,9 @@ def main():
                 print("=" * W)
                 print(f"  {'CLUB METRICS':}")
                 print(f"    Club Speed  : {metrics['speed']:.1f} mph")
-                print(f"    Face Angle  : {face_label}")
-                print(f"    Swing Path  : {eff_path:+.1f}°")
-                print(f"    Face Contact: {contact_label}")
+                print(f"    Face Angle  : {labels['face_angle']}")
+                print(f"    Club Path   : {labels['swing_path']}")
+                print(f"    Face Contact: {labels['face_contact']}")
                 real_smash = (ball.ball_speed / metrics['speed']) if metrics['speed'] > 0 else 0.0
                 print(f"    Smash Factor: {real_smash:.2f}")
                 print("-" * W)
@@ -384,7 +357,7 @@ def main():
                 print(f"    Launch (H)  : {ball.launch_direction:+.1f}°")
                 print(f"    Total Spin  : {ball.total_spin:.0f} rpm")
                 print(f"    Spin Axis   : {ball.spin_axis:+.1f}°")
-                print(f"    Shot Shape  : {shape_label}")
+                print(f"    Shot Shape  : {labels['shot_shape']}")
                 print("=" * W + "\n")
 
                 overlay.push_state({
@@ -394,16 +367,16 @@ def main():
                     "source":       source,
                     "hand_label":   hand_label,
                     "club_speed":   f"{metrics['speed']:.1f}",
-                    "face_angle":   face_label,
-                    "swing_path":   f"{eff_path:+.1f}°",
-                    "face_contact": contact_label,
+                    "face_angle":   labels["face_angle"],
+                    "swing_path":   labels["swing_path"],
+                    "face_contact": labels["face_contact"],
                     "smash_factor": f"{real_smash:.2f}",
                     "ball_speed":   f"{ball.ball_speed:.1f}",
                     "launch_v":     f"{ball.launch_angle:.1f}",
                     "launch_h":     f"{ball.launch_direction:+.1f}",
                     "total_spin":   f"{ball.total_spin:.0f}",
                     "spin_axis":    f"{ball.spin_axis:+.1f}",
-                    "shot_shape":   shape_label,
+                    "shot_shape":   labels["shot_shape"],
                 })
 
                 if api_socket:

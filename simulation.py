@@ -129,7 +129,8 @@ def generate_from_metrics(speed, face_angle, path_deg, club_name="Driver", verbo
     return data
 
 
-def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, speed_pct=100):
+def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, speed_pct=100,
+                            left_handed=False):
     """
     Build a 60-byte HID packet using a randomised named shot profile.
     Used for keyboard-triggered random shots (Ctrl+Space / Ctrl+S).
@@ -153,9 +154,14 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, sp
         print(f"[SIMULATION] Profile: {profile_name.capitalize():<8} | "
               f"Club: {club_name:<6} | Speed: {target_speed:.1f} mph")
 
-    return generate_from_metrics(target_speed, target_face,
-                                 math.degrees(math.atan2((f_min - b_min_A) * LED_SPACING,
-                                                         SENSOR_SPACING)),
+    target_path = math.degrees(math.atan2((f_min - b_min_A) * LED_SPACING, SENSOR_SPACING))
+
+    # Profiles are written for a right-handed golfer; mirror them so a "fade" is still a fade for LH.
+    if left_handed:
+        target_face = -target_face
+        target_path = -target_path
+
+    return generate_from_metrics(target_speed, target_face, target_path,
                                  club_name, verbose=False)
 
 

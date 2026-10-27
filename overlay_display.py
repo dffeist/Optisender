@@ -179,35 +179,17 @@ class OverlayDisplay:
         if club:
             self._club_lbl.config(text=club)
 
+        # Switching hands makes the last shot's labels wrong for the new hand — blank them.
+        if s.get("clear_shot"):
+            for var, _ in self._vars.values():
+                var.set("---")
+
+        # Values arrive already named for the golfer's hand (see swing_labels.py).
         for key in ("club_speed", "face_angle", "swing_path", "face_contact", "smash_factor"):
             value = s.get(key)
             if key in self._vars and value is not None:
-                if self._left_handed:
-                    value = self._flip_for_lh(key, value)
                 var, unit = self._vars[key]
                 var.set(f"{value}{unit}" if unit else str(value))
-
-    _CONTACT_FLIP = {
-        "Toe": "Heel", "Heel": "Toe",
-        "Extreme Toe": "Extreme Heel", "Extreme Heel": "Extreme Toe",
-        "Far Toe": "Far Heel", "Far Heel": "Far Toe",
-    }
-
-    def _flip_for_lh(self, key, value):
-        if key == "face_angle":
-            if value.startswith("Open"):
-                return value.replace("Open", "Closed", 1)
-            if value.startswith("Closed"):
-                return value.replace("Closed", "Open", 1)
-        elif key == "swing_path":
-            try:
-                num = float(value.replace("°", "").replace("+", ""))
-                return f"{-num:+.1f}°"
-            except ValueError:
-                pass
-        elif key == "face_contact":
-            return self._CONTACT_FLIP.get(value, value)
-        return value
 
     def _handle_tuning_click(self):
         if self._sim_input:
