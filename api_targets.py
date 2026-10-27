@@ -17,10 +17,10 @@ def _exe_dir():
 TARGETS_FILE = os.path.join(_exe_dir(), "targets.json")
 
 DEFAULT_CONFIG = {
-    "club_source": "any",  # "any", "opengolfsim" or "gspro": whose club selection drives OptiSender
-    "opengolfsim": {"enabled": True, "host": "127.0.0.1", "port": 3111},
-    "gspro": {"enabled": False, "host": "127.0.0.1", "port": 921,
-              "device_id": "OptiSender", "send_club_data": True},
+    "club_source": "any",  # "any", "openconnect" or "opengolfsim": whose club selection drives OptiSender
+    "openconnect": {"enabled": True, "host": "127.0.0.1", "port": 921,
+                    "device_id": "OptiSender", "send_club_data": True},
+    "opengolfsim": {"enabled": False, "host": "127.0.0.1", "port": 3111},
 }
 
 RECONNECT_INTERVAL = 5.0
@@ -44,7 +44,7 @@ def load_targets_config(path=None):
     return cfg
 
 
-# Clubs GSPro can select that have no entry in tuning.json -> nearest tuned club
+# Clubs an Open Connect simulator can select that have no entry in tuning.json -> nearest tuned club
 _UNTUNED_FALLBACK = {
     "2W": "3W", "4W": "3W", "7W": "5W",
     "2H": "5H", "3H": "5H", "4H": "5H",
@@ -246,9 +246,11 @@ class OpenGolfSimTarget(ApiTarget):
         }
 
 
-class GSProTarget(ApiTarget):
-    name = "gspro"
-    label = "GSPro Connect"
+class OpenConnectTarget(ApiTarget):
+    """Open Connect v1 (originated by GSPro): MuniGolf's relay, GSPro and other compatible simulators."""
+
+    name = "openconnect"
+    label = "Open Connect"
 
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -306,14 +308,14 @@ class GSProTarget(ApiTarget):
             payload["ClubData"] = {
                 "Speed": metrics["speed"],
                 "Path": metrics["path_deg"],
-                # Raw sensor face angle is inverted vs. Trackman; GSPro expects open = positive.
+                # Raw sensor face angle is inverted vs. Trackman; Open Connect expects open = positive.
                 "FaceToTarget": -metrics["face_angle"],
                 "SpeedAtImpact": metrics["speed"],
             }
         return payload
 
 
-_TARGET_CLASSES = (OpenGolfSimTarget, GSProTarget)
+_TARGET_CLASSES = (OpenConnectTarget, OpenGolfSimTarget)
 
 
 def build_targets(cfg):

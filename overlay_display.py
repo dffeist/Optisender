@@ -14,7 +14,7 @@ FONT_VAL  = ("Consolas", 20)
 FONT_LBL  = ("Consolas", 18)
 WARN_COLOR = "#ffa726"
 WIDTH     = 160
-TARGET_ROWS = [("opengolfsim", "OpenGolfSim"), ("gspro", "GSPro")]
+TARGET_ROWS = [("openconnect", "Open Connect"), ("opengolfsim", "OpenGolfSim")]
 
 
 class OverlayDisplay:
