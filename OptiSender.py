@@ -212,6 +212,16 @@ def main():
                             print(f"*** CLUB UPDATED TO: {user_club} (rec: {cname}) [{target.label}] ***")
                             overlay.push_state({"club": user_club, "source": "API", "hand_label": "LH" if left_handed else "RH"})
                             sim_window.set_club(user_club)
+                    elif event[0] == "hand":
+                        # Follow the golfer's hand from the simulator (same source rule as the club)
+                        if club_source not in ("any", target.name):
+                            continue
+                        new_left = (event[1] == "LH")
+                        if new_left != left_handed:
+                            left_handed = new_left
+                            print(f"*** HANDEDNESS: {'Left-Handed' if left_handed else 'Right-Handed'} (from {target.label}) ***")
+                            overlay.push_state({"using_ball": using_ball, "left_handed": left_handed, "clear_shot": True})
+                            sim_window.set_handed(left_handed)
                     elif event[0] == "result":
                         if sim_ready_timer is not None:
                             sim_ready_timer.cancel()

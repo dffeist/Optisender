@@ -119,12 +119,32 @@ def main():
     # 201 player message -> club event (also when glued to a 200 in one TCP read)
     relay.push({"Code": 201, "Message": "GSPro Player Information", "Player": {"Handed": "RH", "Club": "DR"}})
     pump(target, events=events)
-    assert events == [("club", "Driver", "DR")], events
+    assert events == [("club", "Driver", "DR"), ("hand", "RH")], events
     events.clear()
     relay.push({"Code": 200})
     relay.push({"Code": 201, "Player": {"Handed": "RH", "Club": "AW"}})
     pump(target, events=events)
     assert events == [("club", "GW", "AW")], events
+    events.clear()
+    relay.push({"Code": 201, "Player": {"Handed": "LH", "Club": "I8"}})   # MuniGolf numbers irons letter-first
+    pump(target, events=events)
+    assert events == [("club", "8I", "I8"), ("hand", "LH")], events   # hand changed RH -> LH
+
+    # handedness: reported once per change, not on every repeated message
+    events.clear()
+    relay.push({"Code": 201, "Player": {"Handed": "LH", "Club": "I8"}})
+    pump(target, events=events)
+    assert events == [("club", "8I", "I8")], events
+    events.clear()
+    relay.push({"Code": 201, "Player": {"Handed": "RH"}})            # hand only, no club
+    pump(target, events=events)
+    assert events == [("hand", "RH")], events
+    events.clear()
+    for odd in ({"Club": "DR"}, {"Handed": ""}, {"Handed": "XX"}, {"Handed": None}):   # missing or unknown hand
+        relay.push({"Code": 201, "Player": odd})
+    relay.push({"Code": 201, "Player": {"Handed": "lh"}})            # lower case accepted
+    pump(target, events=events)
+    assert events == [("club", "Driver", "DR"), ("hand", "LH")], events
 
     # 5xx is not fatal
     relay.push({"Code": 501, "Message": "failure"})
@@ -144,6 +164,12 @@ def main():
     assert target.reconnect() and target.status == "connecting"
     assert wait_for(lambda: (pump(target, 0.1) or target.status == "connected") and len(relay.received) > count, 5.0), \
         "did not reconnect on request"
+
+    # a new connection announces the golfer's hand again, even though it is unchanged
+    events.clear()
+    relay.push({"Code": 201, "Player": {"Handed": "LH"}})
+    pump(target, events=events)
+    assert events == [("hand", "LH")], events
 
     # relay drops the client -> target notices and reconnects with a fresh ready message
     count = len(relay.received)

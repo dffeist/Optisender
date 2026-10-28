@@ -16,7 +16,7 @@ class PhysicsEngine:
     def __init__(self, tuning_file="tuning.json"):
         self.tuning_file = tuning_file
         self.params = self.load_tuning()
-        
+        self._warned_clubs = set()
 
     def load_tuning(self):
         if os.path.exists(self.tuning_file):
@@ -56,7 +56,13 @@ class PhysicsEngine:
         face_angle = metrics.get('face_angle', 0.0) * -1
         path       = metrics.get('path_deg', 0.0)
 
-        club_params = self.params.get(club_name, self.params.get("Driver"))
+        club_params = self.params.get(club_name)
+        if club_params is None:
+            # Never fall back to the Driver silently: its smash, launch and spin are wrong for any other club
+            if club_name not in self._warned_clubs:
+                self._warned_clubs.add(club_name)
+                print(f"[PHYSICS] No tuning for club '{club_name}', using Driver values.")
+            club_params = self.params.get("Driver")
 
         # 1. Ball Speed
         smash = club_params.get("BallSpeed", 1.45)

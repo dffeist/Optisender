@@ -274,7 +274,7 @@ The window cannot be closed manually — it is tied to the hardware detection st
 | Control | Description |
 |---|---|
 | **Send Shot** | Builds a metrics dict directly from the current slider values and injects it into the physics engine (PhysicsEngine → Overlay → API). Does **not** generate a HID packet — no LED quantization or encoding error is introduced |
-| **Right Handed / Left Handed** | Handedness toggle — color-coded orange (RH) / blue (LH), synced with `Ctrl+H` and the overlay indicator |
+| **Right Handed / Left Handed** | Handedness toggle — color-coded orange (RH) / blue (LH), synced with `Ctrl+H` and the overlay indicator. When Open Connect is connected, OptiSender also follows the golfer's hand from the simulator (MuniGolf sends `Handed` with its player message): it switches when the hand is first reported on a connection and whenever it changes, and the toggle still works as a manual override in between |
 | **Club** | Select the club for this shot. Defaults to the club reported by OpenGolfSim; can be overridden independently for testing |
 | **Club Speed (mph)** | Target club head speed in miles per hour (10–120 mph) |
 | **Face Angle (° +right)** | Direction the face points at impact, relative to the target line. Sign convention: **positive = right of target, negative = left** for both RH and LH |

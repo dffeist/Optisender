@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import select
 import socket
 import sys
@@ -52,12 +53,21 @@ _UNTUNED_FALLBACK = {
 }
 
 
+# Simulators send numbered clubs as letter + number (MuniGolf: I8, W3, H5); tuning.json names them
+# number + letter (8I, 3W, 5H).
+_NUMBERED_CLUB = re.compile(r"([WHI])(\d)|(\d)([WHI])")
+
+
 def _map_club(cid):
     """Map a simulator club id to an OptiSender/tuning.json club name."""
-    cid = cid.strip()
-    if cid in ("DR", "1W"): return "Driver"
+    cid = cid.strip().upper()
+    if cid in ("DR", "1W", "W1"): return "Driver"
     if cid == "PT": return "Putter"
     if cid in ("AW", "UW"): return "GW"
+    match = _NUMBERED_CLUB.fullmatch(cid)
+    if match:
+        letter, number = (match.group(1), match.group(2)) if match.group(1) else (match.group(4), match.group(3))
+        cid = f"{number}{letter}"
     return _UNTUNED_FALLBACK.get(cid, cid)
 
 
@@ -86,6 +96,7 @@ class ApiTarget:
         self.sock = None
         self._buffer = ""
         self._last_attempt = 0.0
+        self._last_hand = None   # golfer's hand last reported on this connection
 
     @property
     def connected(self):
@@ -108,7 +119,7 @@ class ApiTarget:
 
     def poll(self):
         """Reconnect if needed, run keep-alives and read messages. Returns a list of events:
-        ("club", club_name, display_name) or ("result", carry, total)."""
+        ("club", club_name, display_name), ("hand", "LH" or "RH") or ("result", carry, total)."""
         events = []
         if not self.enabled:
             return events
@@ -167,6 +178,16 @@ class ApiTarget:
                 pass
         self.sock = None
         self._buffer = ""
+        self._last_hand = None   # a new connection announces the golfer's hand again
+
+    def _hand_event(self, value):
+        """[("hand", "LH"/"RH")] the first time a hand is reported on this connection and whenever it
+        changes, so a manual toggle in OptiSender is not overwritten by every repeated message."""
+        hand = str(value or "").strip().upper()
+        if hand not in ("LH", "RH") or hand == self._last_hand:
+            return []
+        self._last_hand = hand
+        return [("hand", hand)]
 
     def _connect(self):
         if self.sock is not None:
@@ -308,9 +329,12 @@ class OpenConnectTarget(ApiTarget):
             return []
         print(f"\n[{self.label} IN] {json.dumps(msg)}")
         if code == 201:
-            cid = msg.get("Player", {}).get("Club", "")
+            player = msg.get("Player", {})
+            events = []
+            cid = player.get("Club", "")
             if cid:
-                return [("club", _map_club(cid), cid)]
+                events.append(("club", _map_club(cid), cid))
+            return events + self._hand_event(player.get("Handed"))
         return []
 
     def _shot_payload(self, ball, metrics, club):

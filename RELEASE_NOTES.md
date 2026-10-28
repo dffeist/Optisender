@@ -2,6 +2,14 @@
 
 ## What's New since v1.02
 
+### Handedness Follows the Simulator
+
+MuniGolf's player message (Open Connect code 201) includes the golfer's hand (`"Handed":"LH"`), which OptiSender used to ignore, so it stayed right-handed unless toggled by hand. The Open Connect target now reports the hand (`("hand", "LH"/"RH")`) the first time it is seen on a connection and whenever it changes, and the main loop switches OptiSender, the overlay and the Manual Simulation window to match, printing `*** HANDEDNESS: Left-Handed (from Open Connect) ***`. It follows the same `club_source` rule as the club. Because it only acts on a first report or a change, a manual Ctrl+H toggle is not overwritten by later repeated messages. OpenGolfSim is unchanged: its player message has no documented handedness field. Covered by the handedness checks in `test_open_connect.py`.
+
+### Fixed: Irons and Woods Selected in MuniGolf Used the Driver's Settings
+
+MuniGolf names numbered clubs letter-first (`I8`, `W3`, `H5`), but `tuning.json` names them number-first (`8I`, `3W`, `5H`). The ids never matched, and `PhysicsEngine` silently fell back to the **Driver** entry, so any iron, wood or hybrid chosen in MuniGolf was sent with the Driver's smash factor, launch angle and spin (for example an 8 iron at 79 mph came out as 12.5 deg and 3275 rpm instead of 23.0 deg and 8500 rpm). `_map_club` now translates both spellings (`I8`, `8I`, any case), and an id with no tuning entry prints a one-time `[PHYSICS] No tuning for club ...` warning instead of falling back silently. Covered by `test_club_ids.py`.
+
 ### Quieter Terminal While the Pad Is Unplugged
 
 OptiSender retries the OptiShot every 10 s while in simulation mode. Those silent retries no longer print `[DEVICE] Attempting to reconnect to OptiShot...` and `HID Connection Error: open failed` each time. The terminal now shows only status changes: the first failure at startup, the switch to simulation mode when the pad disconnects, and the reconnect when it returns. Covered by `test_opti_reader.py`.
