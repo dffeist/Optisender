@@ -301,8 +301,8 @@ class SimulationWindow:
         self._path_var  = tk.DoubleVar(master=win, value=0.0)
 
         self._make_slider(win, "Club Speed (mph)", self._speed_var,  10,      120,      0.5, pad)
-        self._make_slider(win, "Face Angle (°)",   self._face_var,  -20,       20,      1.0, pad)
-        self._make_slider(win, "Club Path (°)",    self._path_var,  PATH_MIN, PATH_MAX, 1.0, pad)
+        self._make_slider(win, "Face Angle (° +right)", self._face_var,  -20,       20,      1.0, pad)
+        self._make_slider(win, "Club Path (° +right)",  self._path_var,  PATH_MIN, PATH_MAX, 1.0, pad)
 
         # Status / ready indicator
         self._status_var = tk.StringVar(master=win, value="")
@@ -360,10 +360,10 @@ class SimulationWindow:
         path_deg   = self._path_var.get()
         club       = self._club
 
-        # Sensor convention: face_angle in metrics is physically inverted from Trackman.
-        # LH also flips sign so physics and overlay labelling stay consistent.
-        sensor_face = face_angle  if self._left_handed else -face_angle
-        sensor_path = -path_deg   if self._left_handed else  path_deg
+        # Sliders are world-frame (positive = right of target) for both hands — handedness only
+        # changes the labels shown. Raw pad face angle has the opposite sign, so negate it here.
+        sensor_face = -face_angle
+        sensor_path = path_deg
 
         metrics = {
             "speed":        speed,

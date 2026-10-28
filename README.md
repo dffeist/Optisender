@@ -277,19 +277,19 @@ The window cannot be closed manually — it is tied to the hardware detection st
 | **Right Handed / Left Handed** | Handedness toggle — color-coded orange (RH) / blue (LH), synced with `Ctrl+H` and the overlay indicator |
 | **Club** | Select the club for this shot. Defaults to the club reported by OpenGolfSim; can be overridden independently for testing |
 | **Club Speed (mph)** | Target club head speed in miles per hour (10–120 mph) |
-| **Face Angle (°)** | Club face angle at impact in degrees. Sign convention: **positive = open** (face pointing away from golfer) for both RH and LH |
-| **Club Path (°)** | Club path direction at impact in degrees. Sign convention: **positive = in-to-out** (toward target side) for both RH and LH |
+| **Face Angle (° +right)** | Direction the face points at impact, relative to the target line. Sign convention: **positive = right of target, negative = left** for both RH and LH |
+| **Club Path (° +right)** | Direction the clubhead is travelling at impact, relative to the target line. Sign convention: **positive = heading right of target, negative = left** for both RH and LH |
 
 ### Sign conventions
 
-Both face angle and path follow the golfer's own frame of reference regardless of handedness:
+Both sliders are real physics values (world frame) and are **not** affected by handedness: the same slider values give the same ball flight for a RH and LH golfer. Handedness only changes the names shown in the console and overlay:
 
-| Golfer | Positive face | Negative face | Positive path | Negative path |
-|---|---|---|---|---|
-| **Right-handed** | Open — pointing right | Closed — pointing left | In-to-out — left to right | Out-to-in — right to left |
-| **Left-handed** | Open — pointing left | Closed — pointing right | In-to-out — right to left | Out-to-in — left to right |
-
-The handedness conversion is applied internally before physics so the same face/path values produce the same ball flight for a RH and LH golfer when their inputs are sign-equivalent.
+| Slider value | RH shows | LH shows |
+|---|---|---|
+| Face + (right of target) | Open | Closed |
+| Face − (left of target) | Closed | Open |
+| Path + (heading right) | In-to-Out | Out-to-In |
+| Path − (heading left) | Out-to-In | In-to-Out |
 
 ### Ready state
 
@@ -357,11 +357,11 @@ The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl
 │  • x_travel = speed_per_tick × ticks                   │
 │  • angle = atan(x / y) in degrees                       │
 │  • Weighted average: (front_avg + 2×back_avg) / 3       │
-│  • Sign negated to match Trackman convention:           │
-│    positive = open (right) for RH golfer                │
+│  • Raw value is the opposite sign to the world frame    │
+│    (physics negates it: positive = right of target)     │
 │                                                         │
 │  Path: atan2(centroid_front − centroid_back, spacing)   │
-│    positive = in-to-out (right) for RH golfer           │
+│    positive = heading right of target (world frame)     │
 │                                                         │
 │  Returns: speed, face_angle, path_deg, contact          │
 └────────────────────┬────────────────────────────────────┘
@@ -371,10 +371,10 @@ The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl
 │                   PhysicsEngine                         │
 │  ballphysics.py  +  tuning.json                         │
 │                                                         │
-│  Sign convention (Trackman):                            │
-│    face_angle > 0 = open / pointing right (RH)         │
-│    path > 0       = in-to-out / rightward (RH)         │
-│    Physics is RH-only; LH affects overlay labels only   │
+│  Sign convention (world frame, both hands):             │
+│    face_angle > 0 = pointing right of target            │
+│    path > 0       = heading right of target             │
+│    Handedness affects the displayed labels only         │
 │                                                         │
 │  eff_face = k × tanh(face_angle / k)   [compression]   │
 │                                                         │
@@ -514,15 +514,15 @@ All per-club constants live in [tuning.json](tuning.json). The [Tuning Editor](#
 | `Vla` | Per-club float | Base vertical launch angle in degrees |
 | `BS` | Per-club int | Base back-spin in RPM |
 
-### Sign conventions (Trackman-aligned)
+### Sign conventions (world frame)
 
 | Value | Positive meaning | Negative meaning |
 |---|---|---|
-| `face_angle` | Open — face pointing right (RH) | Closed — face pointing left (RH) |
-| `path_deg` | In-to-out — club traveling right (RH) | Out-to-in — club traveling left (RH) |
-| `spin_axis` | Fade / slice (RH) | Draw / hook (RH) |
+| `face_angle` | Face pointing right of the target line | Face pointing left of the target line |
+| `path_deg` | Clubhead heading right of the target line | Clubhead heading left of the target line |
+| `spin_axis` | Ball curves right | Ball curves left |
 
-Physics is right-handed only. For left-handed players the overlay re-labels face angle (Open↔Closed), path sign, and contact (Toe↔Heel) — the physics output and API payload are unchanged.
+These are the same for a RH and LH golfer, so the physics output and API payload do not depend on handedness. Handedness only changes the names shown in the console and overlay: face Open↔Closed, path In-to-Out↔Out-to-In, Heel↔Toe, and shot shape (a right curve is a Fade/Slice for RH and a Draw/Hook for LH). See `CONTEXT.md` for the definitions.
 
 ### Contact penalty
 

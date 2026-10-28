@@ -1,3 +1,67 @@
+# OptiSender v1.0.3 — Release Notes
+
+## What's New since v1.02
+
+### Golfer-Frame Labels (console and overlay now agree)
+
+Face angle, club path and shot shape are **world-frame** values everywhere in the pipeline: positive is right of the target line, for both hands. Handedness only changes the *names* shown to the golfer. All labels are now built once in the new `swing_labels.py` and the same strings go to the console and the overlay (previously the console showed unconverted LH values and disagreed with the overlay). Terms are defined in `CONTEXT.md`.
+
+| World value | RH shows | LH shows |
+|---|---|---|
+| Face + | Open | Closed |
+| Face − | Closed | Open |
+| Path + | In-to-Out | Out-to-In |
+| Path − | Out-to-In | In-to-Out |
+
+- Path now displays as a word plus degrees (e.g. `In-to-Out 4.6°`) like face does; within 0.5° of the target line it reads `Neutral` (face reads `Square`). Console line renamed "Swing Path" → "Club Path".
+- **Shot Shape** (Slice/Fade/Draw/Hook) is now named for the golfer's hand. It was previously world-frame, so an LH golfer's right-curving ball was mislabelled "Slice" in the console.
+- Toggling handedness (Ctrl+H or the sim window) now clears the displayed shot instead of leaving stale labels.
+- Ctrl+Space random shots are mirrored for LH so a "fade" profile is still a fade.
+- Removed `_flip_for_lh()` and `_CONTACT_FLIP` from `overlay_display.py`. Ball-flight physics and the values sent to OpenGolfSim are unchanged.
+
+**Heel/Toe swapped — needs one physical check.** Heel and Toe were previously reversed for RH relative to RepliShot's own face and path sign conventions. Sensor index 0 is now the heel end (nearest an RH golfer) and 7 the toe end, mirrored for LH; "Extreme Toe" is now "Far Toe". This is inferred from RepliShot's source and pad photo, not yet confirmed on a pad: hit one clearly off-toe shot and confirm it reads Toe.
+
+**Known deviation (unchanged on purpose):** `ballphysics.py` adds `face_angle * 0.3` to the vertical launch angle using the signed world face, so a mirrored LH swing gets a different vertical launch than its RH twin. Left as-is per the decision not to change flight physics.
+
+### Overlay Values Auto-Fit the Window Width
+
+Long values such as `In-to-Out 12.3°` no longer overflow the 160 px overlay. Each value label starts at its normal size and shrinks one point at a time (down to 8 pt) until the text fits. Short values such as `Far Heel` keep full size. Label wording is unchanged, so the console and API payload are unaffected.
+
+### Manual Simulation Window — Sign Convention Clarified
+
+- Face and Club Path sliders are now labelled **"(° +right)"**: positive is right of the target line for both hands. Sliders are real physics values; handedness only changes the labels shown.
+- Direct-injection sensor values are the same for RH and LH. The v1.0.0a6 note that showed different LH sensor values was incorrect.
+
+| Slider input | Sensor value sent (RH and LH) |
+|---|---|
+| Face = +5° (pointing right of target) | `face_angle = −5.0` (sensor inverted) |
+| Path = +10° (heading right of target) | `path_deg = +10.0` |
+
+### Documentation
+
+`README.md` sign-convention tables, architecture diagram and physics notes rewritten for the world-frame model.
+
+### Repository Housekeeping
+
+- Removed a committed credentials file and added it to `.gitignore`.
+- `build.bat` (PyInstaller onedir build) remains gitignored. Build used for this release: `--onedir --noupx --console`, with `tuning_default.json` bundled and `tuning.json` placed beside the exe.
+
+---
+
+## Files Changed since v1.02
+
+| File | Change |
+|---|---|
+| `swing_labels.py` | New — builds all golfer-frame labels (face, path, contact, shot shape) once |
+| `OptiSender.py` | Console uses `describe_swing()`; "Swing Path" → "Club Path"; handedness toggle clears shot; random shots mirrored for LH |
+| `overlay_display.py` | Removed LH flip logic; value labels auto-shrink to fit width |
+| `simulation.py` | `generate_simulated_shot()` takes `left_handed`; slider labels show "(° +right)" |
+| `CONTEXT.md` | New — glossary of golfer-frame / world-frame terms |
+| `README.md` | Sign-convention sections updated for world frame |
+| `.gitignore` | Credentials file ignored |
+
+---
+
 # OptiSender v1.02 — Release Notes
 
 ## What's New since v1.01
@@ -195,26 +259,17 @@ The physics engine has been simplified to right-handed conventions throughout. L
 - `Ctrl+H` and the simulation window handedness toggle still work, but they control the overlay display labels only
 - Deleted `verify_handedness.py` (development diagnostic, no longer needed)
 
-### Golfer-Frame Labels (console and overlay now agree)
+### Overlay LH Label Flipping
 
-Face angle, club path and shot shape are **world-frame** values everywhere in the pipeline: positive is right of the target line, for both hands. Handedness only changes the *names* shown to the golfer. All labels are now built once in the new `swing_labels.py` and the same strings go to the console and the overlay (previously the console showed unconverted LH values and disagreed with the overlay). Terms are defined in `CONTEXT.md`.
+When Left-Handed mode is active, the overlay now re-labels sensor values to match the golfer's frame of reference without altering the physics output:
 
-| World value | RH shows | LH shows |
+| Metric | RH display | LH display |
 |---|---|---|
-| Face + | Open | Closed |
-| Face − | Closed | Open |
-| Path + | In-to-Out | Out-to-In |
-| Path − | Out-to-In | In-to-Out |
+| Face Angle | Open / Closed as computed | Open ↔ Closed swapped |
+| Club Path | `+` = in-to-out | Sign negated (`+` = in-to-out from LH perspective) |
+| Face Contact | Toe / Heel as computed | Toe ↔ Heel swapped |
 
-- Path now displays as a word plus degrees (e.g. `In-to-Out 4.6°`) like face does; within 0.5° of the target line it reads `Neutral` (face reads `Square`). Console line renamed "Swing Path" → "Club Path".
-- **Shot Shape** (Slice/Fade/Draw/Hook) is now named for the golfer's hand. It was previously world-frame, so an LH golfer's right-curving ball was mislabelled "Slice" in the console.
-- Toggling handedness (Ctrl+H or the sim window) now clears the displayed shot instead of leaving stale labels.
-- Ctrl+Space random shots are mirrored for LH so a "fade" profile is still a fade.
-- Removed `_flip_for_lh()` and `_CONTACT_FLIP` from `overlay_display.py`. Ball-flight physics and the values sent to OpenGolfSim are unchanged.
-
-**Heel/Toe swapped — needs one physical check.** Heel and Toe were previously reversed for RH relative to RepliShot's own face and path sign conventions. Sensor index 0 is now the heel end (nearest an RH golfer) and 7 the toe end, mirrored for LH; "Extreme Toe" is now "Far Toe". This is inferred from RepliShot's source and pad photo, not yet confirmed on a pad: hit one clearly off-toe shot and confirm it reads Toe.
-
-**Known deviation (unchanged on purpose):** `ballphysics.py` adds `face_angle * 0.3` to the vertical launch angle using the signed world face, so a mirrored LH swing gets a different vertical launch than its RH twin. Left as-is per the decision not to change flight physics.
+New `_flip_for_lh()` method and `_CONTACT_FLIP` lookup dict added to `overlay_display.py`.
 
 ### Manual Simulation — Direct Metrics Injection
 
@@ -308,8 +363,6 @@ A long-standing bug where left-handed ball flight was computed incorrectly has b
 - `generate_simulated_shot()` refactored to call `generate_from_metrics()` internally — both paths share identical packet-building logic
 
 ### Swing Path Display Label Fixed (LH)
-
-> Superseded by "Golfer-Frame Labels" above: path is now shown as In-to-Out / Out-to-In / Neutral, named for the golfer's hand.
 
 Swing path displayed in the overlay and console for left-handed golfers was being negated, showing the inverse of the entered value:
 

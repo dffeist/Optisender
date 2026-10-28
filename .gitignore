@@ -16,6 +16,7 @@ dist/
 
 # Build script (local only)
 build.bat
+build.sh
 
 # Local testing tool
 test.py

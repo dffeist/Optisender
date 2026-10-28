@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.font as tkfont
 import queue
 import threading
 
@@ -15,6 +16,8 @@ FONT_LBL  = ("Consolas", 18)
 WARN_COLOR = "#ffa726"
 WIDTH     = 160
 TARGET_ROWS = [("openconnect", "Open Connect"), ("opengolfsim", "OpenGolfSim")]
+FIT_WIDTH = WIDTH - 14   # label width available after the frame padding
+MIN_VAL_SIZE = 8
 
 
 class OverlayDisplay:
@@ -147,14 +150,16 @@ class OverlayDisplay:
         ]
 
         self._vars = {}
+        self._val_fonts = {}
         for display_name, key, unit in club_rows:
             cell = tk.Frame(metrics_frame, bg=BG)
             cell.pack(fill="x", pady=2)
             tk.Label(cell, text=display_name, bg=BG, fg=DIM,
                      font=FONT_LBL, anchor="center").pack(fill="x")
             var = tk.StringVar(value="---")
-            val_font = ("Consolas", 14) if key == "face_angle" else FONT_VAL
+            val_font = tkfont.Font(family="Consolas", size=14 if key == "face_angle" else FONT_VAL[1])
             self._vars[key] = (var, unit)
+            self._val_fonts[key] = (val_font, val_font.cget("size"))
             tk.Label(cell, textvariable=var, bg=BG, fg=FG,
                      font=val_font, anchor="center").pack(fill="x")
 
@@ -218,7 +223,18 @@ class OverlayDisplay:
             value = s.get(key)
             if key in self._vars and value is not None:
                 var, unit = self._vars[key]
-                var.set(f"{value}{unit}" if unit else str(value))
+                text = f"{value}{unit}" if unit else str(value)
+                var.set(text)
+                self._fit_font(key, text)
+
+    def _fit_font(self, key, text):
+        """Shrink the value font from its base size until the text fits the overlay width."""
+        font, base = self._val_fonts[key]
+        size = base
+        font.configure(size=size)
+        while size > MIN_VAL_SIZE and font.measure(text) > FIT_WIDTH:
+            size -= 1
+            font.configure(size=size)
 
     def _handle_tuning_click(self):
         if self._sim_input:
