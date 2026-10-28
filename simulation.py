@@ -170,10 +170,14 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, sp
 class _ClubSelectorPopup:
     def __init__(self, parent, current_club, on_select):
         top = tk.Toplevel(parent)
+        self.top = top
         top.title("Select Club")
         top.configure(bg=BG)
         top.resizable(False, False)
-        top.grab_set()
+        # The parent window is always-on-top, so this modal popup must be too and tied to it,
+        # otherwise it opens hidden behind the parent while its grab blocks every other window.
+        top.transient(parent)
+        top.attributes("-topmost", True)
 
         tk.Label(top, text="Club:", bg=BG, fg=FG, font=FONT_B,
                  pady=8, padx=12).pack()
@@ -191,6 +195,15 @@ class _ClubSelectorPopup:
                   relief="flat", cursor="hand2", width=10,
                   command=confirm).pack(pady=(4, 12))
 
+        # Centre over the parent, bring to the front, then take the modal grab
+        top.update_idletasks()
+        x = parent.winfo_rootx() + (parent.winfo_width() - top.winfo_reqwidth()) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - top.winfo_reqheight()) // 2
+        top.geometry(f"+{max(0, x)}+{max(0, y)}")
+        top.lift()
+        top.focus_force()
+        top.grab_set()
+
 
 class SimulationWindow:
     """
@@ -206,6 +219,7 @@ class SimulationWindow:
         self._queue     = packet_queue
         self._sim_input = sim_input
         self._win       = None
+        self._club_popup = None
         self._visible   = False
         # Mirrors OptiSender's state — updated via set_handed() / set_club()
         self._left_handed = False
@@ -339,7 +353,12 @@ class SimulationWindow:
         self._sim_input["toggle_handed"] = True
 
     def _open_club_selector(self):
-        _ClubSelectorPopup(self._win, self._club, self._on_club_selected)
+        popup = self._club_popup
+        if popup is not None and popup.winfo_exists():   # one at a time: just bring it forward
+            popup.lift()
+            popup.focus_force()
+            return
+        self._club_popup = _ClubSelectorPopup(self._win, self._club, self._on_club_selected).top
 
     def _on_club_selected(self, club):
         self._club = club
