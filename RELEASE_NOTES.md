@@ -1,6 +1,26 @@
-# OptiSender v1.0.3 — Release Notes
+# OptiSender v1.1.0 — Release Notes
 
 ## What's New since v1.02
+
+v1.1.0 brings together two lines of work: the golfer-frame label changes published as **v1.0.3**, and the Open Connect / OpenGolfSim target work from **v1.01 and v1.02** (documented further down), plus everything below.
+
+### Highlights
+
+- **Handedness follows the simulator.** MuniGolf's golfer hand now switches OptiSender, the overlay and the Manual Simulation window automatically.
+- **Irons and woods chosen in MuniGolf now use their own tuning.** They had silently been sent with the Driver's smash, launch angle and spin.
+- **Left-handed launch angle fixed.** A Closed left-handed face no longer raises the launch.
+- **New toe/heel gear effect**, off by default, with a Tuning editor slider; direction follows the golfer's hand.
+- **Overlay:** double-click the title bar to collapse it; new **Reconnect** and **Send Ready** buttons.
+- **Fixed a focus trap** that left the Manual Simulation and Tuning windows unusable.
+- **Quieter terminal** while the pad is unplugged.
+- **Open Connect default port is now 9210** (what MuniGolf's relay listens on).
+
+### ⚠ Upgrading
+
+- **Open Connect port 921 → 9210.** MuniGolf's relay listens on **9210** (921 is GSPro's own port), so the old default never connected. The default in `api_targets.py` and the shipped `targets.json` are now 9210. An existing `targets.json` keeps its saved port: change `"port": 921` to `9210` for MuniGolf (leave it at 921 for GSPro), or delete the file next to the exe and let it be recreated.
+- **`tuning.json` gains `GearEffect`** (percent, default 0). Older files without it work unchanged and get the key the first time you save in the Tuning editor.
+- **Left-handed launch angles change.** They are now mirrored correctly (see below). Right-handed output is unchanged.
+- **Irons, woods and hybrids chosen in MuniGolf will now send their own ball speed, launch and spin** instead of the Driver's, so numbers will look different (more realistic) than before.
 
 ### Toe/Heel Gear Effect (off by default)
 
@@ -12,9 +32,24 @@ The Manual Simulation window gained a **Contact (-heel/+toe)** slider (golfer fr
 
 MuniGolf's player message (Open Connect code 201) includes the golfer's hand (`"Handed":"LH"`), which OptiSender used to ignore, so it stayed right-handed unless toggled by hand. The Open Connect target now reports the hand (`("hand", "LH"/"RH")`) the first time it is seen on a connection and whenever it changes, and the main loop switches OptiSender, the overlay and the Manual Simulation window to match, printing `*** HANDEDNESS: Left-Handed (from Open Connect) ***`. It follows the same `club_source` rule as the club. Because it only acts on a first report or a change, a manual Ctrl+H toggle is not overwritten by later repeated messages. OpenGolfSim is unchanged: its player message has no documented handedness field. Covered by the handedness checks in `test_open_connect.py`.
 
+### Overlay: Collapse, Reconnect and Send Ready
+
+- **Double-click the overlay's title bar** (the bar or its title text) to shrink the window to just the bar; double-click again to restore it. The window keeps its position.
+- **Reconnect** drops the connection to every enabled simulator and connects again, which sends a fresh ready message.
+- **Send Ready** resends the ready message on the existing connection without dropping it.
+- Both act on every ticked target and print `*** <target>: RECONNECTING ***` / `>> Ready sent to <target>.`. They exist because Open Connect sends its ready message once, when the connection opens, and has no heartbeat; if the simulator was not ready to register it, click **Send Ready**, then **Reconnect** if needed. Whether MuniGolf needs a periodic heartbeat is unverified. Covered by `test_open_connect.py`.
+
 ### Fixed: Irons and Woods Selected in MuniGolf Used the Driver's Settings
 
 MuniGolf names numbered clubs letter-first (`I8`, `W3`, `H5`), but `tuning.json` names them number-first (`8I`, `3W`, `5H`). The ids never matched, and `PhysicsEngine` silently fell back to the **Driver** entry, so any iron, wood or hybrid chosen in MuniGolf was sent with the Driver's smash factor, launch angle and spin (for example an 8 iron at 79 mph came out as 12.5 deg and 3275 rpm instead of 23.0 deg and 8500 rpm). `_map_club` now translates both spellings (`I8`, `8I`, any case), and an id with no tuning entry prints a one-time `[PHYSICS] No tuning for club ...` warning instead of falling back silently. Covered by `test_club_ids.py`.
+
+### Fixed: Left-Handed Launch Angle
+
+`ballphysics.py` used to add `face_angle * 0.3` to the vertical launch angle using the signed world face, so a Closed left-handed face raised the launch instead of lowering it (a right-hander's Open face is a positive world value; a left-hander's is negative). `calculate_ball_flight` now takes `left_handed`, and the adjustment follows Open / Closed: an open face adds loft for either hand. Right-handed output is unchanged (all 378 rows of the Test Data sheet in `SwingData.xlsx` still match). Start direction, spin and ball speed are unchanged for both hands; total spin is a fixed per-club value and does not depend on launch. This replaces the earlier "known deviation, left as-is" decision. Covered by `test_ballphysics.py`.
+
+### Fixed: Select Club Popup Trapped Focus
+
+The **Change…** popup in the Manual Simulation window took a modal grab but opened *underneath* the always-on-top Manual Simulation window. Its grab then blocked every other OptiSender window and pulled focus back to the hidden popup on each click: title bars flashed active and went grey, and sliders and buttons would not respond. The popup is now tied to the Manual Simulation window, always on top, centred and focused, and only one can be open at a time.
 
 ### Quieter Terminal While the Pad Is Unplugged
 
@@ -39,8 +74,6 @@ Face angle, club path and shot shape are **world-frame** values everywhere in th
 
 **Heel/Toe swapped — needs one physical check.** Heel and Toe were previously reversed for RH relative to RepliShot's own face and path sign conventions. Sensor index 0 is now the heel end (nearest an RH golfer) and 7 the toe end, mirrored for LH; "Extreme Toe" is now "Far Toe". This is inferred from RepliShot's source and pad photo, not yet confirmed on a pad: hit one clearly off-toe shot and confirm it reads Toe.
 
-**Fixed (branch `lh-vla-fix`):** `ballphysics.py` used to add `face_angle * 0.3` to the vertical launch angle using the signed world face, so a Closed left-handed face raised the launch instead of lowering it. `calculate_ball_flight` now takes `left_handed` and the launch adjustment follows Open / Closed: an open face adds loft for either hand. Right-handed output is unchanged (all 378 rows of the Test Data sheet in `SwingData.xlsx` still match). Direction, spin and ball speed are unchanged for both hands. Covered by `test_ballphysics.py`.
-
 ### Overlay Values Auto-Fit the Window Width
 
 Long values such as `In-to-Out 12.3°` no longer overflow the 160 px overlay. Each value label starts at its normal size and shrinks one point at a time (down to 8 pt) until the text fits. Short values such as `Far Heel` keep full size. Label wording is unchanged, so the console and API payload are unaffected.
@@ -55,14 +88,31 @@ Long values such as `In-to-Out 12.3°` no longer overflow the 160 px overlay. Ea
 | Face = +5° (pointing right of target) | `face_angle = −5.0` (sensor inverted) |
 | Path = +10° (heading right of target) | `path_deg = +10.0` |
 
+### Reference Data and Tests
+
+- **`SwingData.xlsx`** (new, generated by `generate_swing_data.py`): Test Data (378 rows: Driver to SW, face -5/0/+5, path -5/0/+5, contact Toe/Center/Heel, with ball data and estimated distances) and **Driver**, **7 Iron** and **SW** sheets that send nine centre-strike shots each through OptiSender's real engine and Open Connect into MuniGolf and compare them with MuniGolf's Second Window. All sent inputs matched what MuniGolf displayed in 27 of 27 shots, with the same signs for a left-handed MuniGolf profile. The distance model in `generate_swing_data.py` is only an estimate for the spreadsheet (it ran about 7% long on the Driver and about 20-22% long on the 7 iron and SW versus MuniGolf's carry); it is not part of the app.
+- **New tests:** `test_ballphysics.py` (launch angle, both hands), `test_club_ids.py`, `test_gear_effect.py`, `test_opti_reader.py`. `test_open_connect.py` now also covers Reconnect, Send Ready, club ids and handedness events.
+
+### Known Limitations / Not Yet Verified
+
+- **Heel/Toe direction on the pad is unconfirmed** (see the labels section). Keep **Gear Effect** at 0 until it has been checked with real toe and heel strikes, and after measuring how much centre strikes scatter in contact index. The pad's index step is inferred (about 15 mm) from `shot_processor.py`, not from a published spec.
+- **Left-handed launch angle** is verified by unit tests and against MuniGolf's displayed values, not yet with a real left-handed swing on the pad.
+- **Club ids** seen from MuniGolf: `DR`, `I6`, `I7`, `I8`, `SW`. Wood and hybrid ids (`W3`, `W5`, `H5`) follow the usual naming but are unverified. A club with no tuning entry (for example `6H`) prints a one-time warning and uses Driver values.
+- **Handedness sync works for Open Connect only.** OpenGolfSim's player message has no documented handedness field.
+- **Open Connect heartbeat** is not sent; see Reconnect / Send Ready above.
+- **Reference data covers centre strikes only**; the toe and heel rows in the Test Data sheet are identical by design while the gear effect is off.
+
 ### Documentation
 
-`README.md` sign-convention tables, architecture diagram and physics notes rewritten for the world-frame model.
+`README.md` sign-convention tables, architecture diagram and physics notes rewritten for the world-frame model. This release adds the Gear Effect settings, the handedness behaviour and the launch-angle formula (`open_face`).
 
 ### Repository Housekeeping
 
 - Removed a committed credentials file and added it to `.gitignore`.
 - `build.bat` (PyInstaller onedir build) remains gitignored. Build used for this release: `--onedir --noupx --console`, with `tuning_default.json` bundled and `tuning.json` placed beside the exe.
+- `build.sh` (new, gitignored like `build.bat`) builds the exe from WSL by driving the Windows Python, and keeps an existing `tuning.json` / `targets.json` beside the exe. Override the destination with `OUT=<folder>`.
+- `.gitignore` also ignores `build.sh`, `.git-credentials`, `*.git-credentials` and `.netrc`.
+- New `LEFT_HANDED_VLA_ISSUE.md` and `TOE_HEEL_RESEARCH.md` record the investigations behind two of the changes below.
 
 ---
 
@@ -71,12 +121,21 @@ Long values such as `In-to-Out 12.3°` no longer overflow the 160 px overlay. Ea
 | File | Change |
 |---|---|
 | `swing_labels.py` | New — builds all golfer-frame labels (face, path, contact, shot shape) once |
-| `OptiSender.py` | Console uses `describe_swing()`; "Swing Path" → "Club Path"; handedness toggle clears shot; random shots mirrored for LH |
-| `overlay_display.py` | Removed LH flip logic; value labels auto-shrink to fit width |
-| `simulation.py` | `generate_simulated_shot()` takes `left_handed`; slider labels show "(° +right)" |
-| `CONTEXT.md` | New — glossary of golfer-frame / world-frame terms |
-| `README.md` | Sign-convention sections updated for world frame |
-| `.gitignore` | Credentials file ignored |
+| `ballphysics.py` | Left-handed launch angle; gear effect (`GEAR_POINTS`, club scale); one-time warning instead of a silent Driver fallback |
+| `api_targets.py` | Club id mapping (`I8` → `8I`); `("hand", ...)` events; `reconnect()` / `send_ready()`; default port 9210 |
+| `OptiSender.py` | Passes handedness to the engine; follows the simulator's hand; Reconnect / Send Ready requests; quieter retries; console uses `describe_swing()` |
+| `overlay_display.py` | Title-bar double-click collapse; Reconnect / Send Ready buttons; removed LH flip logic; value labels auto-shrink |
+| `simulation.py` | Select Club popup fix; Contact slider (`contact_metrics()`); `generate_simulated_shot()` takes `left_handed`; slider labels "(° +right)" |
+| `tuning_editor.py` | Gear Effect slider; loads older files without `GearEffect` |
+| `opti_reader.py` | `connect(quiet=...)`; silent retries |
+| `tuning.json` / `tuning_default.json` | New `GearEffect` key (0) |
+| `targets.json` | Open Connect port 921 → 9210 |
+| `generate_swing_data.py`, `SwingData.xlsx` | New — reference swing data and MuniGolf comparison sheets |
+| `test_ballphysics.py`, `test_club_ids.py`, `test_gear_effect.py`, `test_opti_reader.py` | New tests; `test_open_connect.py` extended |
+| `CONTEXT.md` | Glossary: Second Window, Ninety Golfer, Gear Effect and the golfer-frame terms |
+| `LEFT_HANDED_VLA_ISSUE.md`, `TOE_HEEL_RESEARCH.md` | New — investigation notes |
+| `README.md` | Sign-convention sections, Gear Effect and handedness behaviour, port 9210 |
+| `.gitignore` | Credentials files and `build.sh` ignored |
 
 ---
 
@@ -86,7 +145,7 @@ Long values such as `In-to-Out 12.3°` no longer overflow the 160 px overlay. Ea
 
 ### Target renamed: GSPro Connect → Open Connect
 
-The "GSPro Connect" target already spoke **Open Connect v1**, the shared launch-monitor protocol (originated by GSPro, `APIversion` `"1"`). It is now named for the protocol rather than for one simulator that uses it. The wire format is unchanged; any simulator that accepts Open Connect works, including **MuniGolf** (its *Open Connect API* launch-monitor option, relay port `9210`) and GSPro.
+The "GSPro Connect" target already spoke **Open Connect v1**, the shared launch-monitor protocol (originated by GSPro, `APIversion` `"1"`). It is now named for the protocol rather than for one simulator that uses it. The wire format is unchanged; any simulator that accepts Open Connect works, including **MuniGolf** (its *Open Connect API* launch-monitor option, relay port `921`) and GSPro.
 
 | v1.01 | v1.02 |
 |---|---|
@@ -97,7 +156,7 @@ The "GSPro Connect" target already spoke **Open Connect v1**, the shared launch-
 
 ### ⚠ Default target changed — Open Connect is on, OpenGolfSim is off
 
-**Open Connect (`127.0.0.1:9210`, MuniGolf's relay) is now the default target and is listed first. OpenGolfSim is kept but off by default.** In v1.01 it was the other way round.
+**Open Connect (`127.0.0.1:921`, MuniGolf's relay) is now the default target and is listed first. OpenGolfSim is kept but off by default.** In v1.01 it was the other way round.
 
 If you use OpenGolfSim and have no `targets.json`, shots will stop reaching it after the upgrade. To restore it, tick **OpenGolfSim** in the overlay (saved automatically) or set `"opengolfsim": { "enabled": true }` in `targets.json`.
 
@@ -105,7 +164,7 @@ If you use OpenGolfSim and have no `targets.json`, shots will stop reaching it a
 
 The config key was renamed and **old keys are not migrated**. If you edited `targets.json` under v1.01:
 
-- Rename the `gspro` block to `openconnect` (settings under the old key are ignored, and `openconnect` falls back to its defaults: enabled, `127.0.0.1:9210`).
+- Rename the `gspro` block to `openconnect` (settings under the old key are ignored, and `openconnect` falls back to its defaults: enabled, `127.0.0.1:921`).
 - If `club_source` is `"gspro"`, change it to `"openconnect"`.
 - Your `opengolfsim` block is read as before, so an OpenGolfSim target you had enabled stays enabled alongside the new default Open Connect target. Untick one in the overlay if you only want a single simulator.
 
@@ -116,7 +175,7 @@ New default `targets.json`:
 ```json
 {
   "club_source": "any",
-  "openconnect": { "enabled": true,  "host": "127.0.0.1", "port": 9210,
+  "openconnect": { "enabled": true,  "host": "127.0.0.1", "port": 921,
                    "device_id": "OptiSender", "send_club_data": true },
   "opengolfsim": { "enabled": false, "host": "127.0.0.1", "port": 3111 }
 }
