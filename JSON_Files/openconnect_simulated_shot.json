@@ -1,0 +1,28 @@
+{
+  "DeviceID": "OptiSender",
+  "Units": "Yards",
+  "ShotNumber": 1,
+  "APIversion": "1",
+  "BallData": {
+    "Speed": 120.5,
+    "SpinAxis": -0.5,
+    "TotalSpin": 7800,
+    "BackSpin": 7799.7,
+    "SideSpin": -68.1,
+    "HLA": -1.4,
+    "VLA": 20.6
+  },
+  "ClubData": {
+    "Speed": 92.0,
+    "Path": -1.0,
+    "FaceToTarget": -1.5,
+    "SpeedAtImpact": 92.0
+  },
+  "ShotDataOptions": {
+    "ContainsBallData": true,
+    "ContainsClubData": true,
+    "LaunchMonitorIsReady": true,
+    "LaunchMonitorBallDetected": true,
+    "IsHeartBeat": false
+  }
+}

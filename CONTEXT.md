@@ -1,8 +1,30 @@
 # OptiSender
 
-Turns what an OptiShot pad measures about a golf swing into ball flight, and shows the swing back to the golfer in their own terms.
+Turns what an OptiShot pad measures about a golf swing into ball flight, forwards it to a golf simulator, and shows the swing back to the golfer in their own terms.
 
 ## Language
+
+### Simulators and protocols
+
+**Simulator**:
+A golf game application that receives shot data from OptiSender and renders the shot (e.g. Muni, OpenGolfSim).
+_Avoid_: Sim UI, game, front-end
+
+**Open Connect**:
+The shared wire protocol (v1) through which a **Simulator** receives launch-monitor shot data and reports the selected club back. Originated by GSPro and adopted by other simulators.
+_Avoid_: GSPro Connect, GSPro protocol, OpenCon
+
+**MuniGolf**:
+A **Simulator** that OptiSender connects to using **Open Connect**, through MuniGolf's **Relay** on the same PC. The game itself may run on another device (e.g. an iPad).
+_Avoid_: Muni
+
+**Relay**:
+The part of MuniGolf that listens for **Open Connect** clients on the PC and passes their shots on to the game.
+_Avoid_: Listener
+
+**OpenGolfSim API**:
+OpenGolfSim's own, separate protocol. Not **Open Connect**.
+_Avoid_: Open Connect (when meaning OpenGolfSim)
 
 ### Frames of reference
 
@@ -73,3 +95,4 @@ _Avoid_: Ball flight shape, curve direction
 
 - "Positive face angle" or "positive path" was used for three different values (the raw pad reading, the **World frame** value, and a golfer-frame slider). Resolved: unqualified **Face Angle** and **Club Path** always mean the **World frame** value.
 - "Club moving left to right" was used for **Club Path**. Resolved: Club Path is the heading at impact relative to the **Target Line**, not a left-to-right sweep.
+- "GSPro" was used for the **Open Connect** protocol; GSPro is a **Simulator**, not the protocol. Resolved: the protocol is **Open Connect**.

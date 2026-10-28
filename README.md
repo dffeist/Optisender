@@ -1,6 +1,6 @@
 # OptiSender
 
-A Python bridge that reads raw swing data from an **OptiShot 2** golf simulator mat over USB HID and forwards calculated ball-flight telemetry to **OpenGolfSim** via a TCP socket API.
+A Python bridge that reads raw swing data from an **OptiShot 2** golf simulator mat over USB HID and forwards calculated ball-flight telemetry to a golf simulator over a TCP socket. It speaks the **Open Connect v1** protocol (the default target — works with **MuniGolf**, GSPro and other Open Connect simulators) and the **OpenGolfSim** API.
 
 Logic and packet structure were ported from the [RepliShot](https://github.com/RepliShot) C++ project (`usbcode.cpp`, `shotprocessing.cpp`). The Python layer adds a physics/ball-flight engine, a real-time tuning editor, and a simulation mode for development without hardware.
 
@@ -74,13 +74,15 @@ pip install pynput
 
 ### 1. Start order
 
-OptiSender is designed to run **alongside** OpenGolfSim (or another golf sim UI) at the same time.  
+OptiSender is designed to run **alongside** your golf simulator at the same time.  
 Recommended start order:
 
-1. Launch OpenGolfSim (or your sim front-end) first.
-2. Then launch OptiSender — it will connect to the running API automatically.
+1. Launch your simulator first. For **MuniGolf**, set *Launch Monitor* to **Open Connect API** and leave the relay *Listen Port* at `921`.
+2. Then launch OptiSender — it will connect to the running relay automatically.
 
-If OpenGolfSim is not yet running when OptiSender starts, that is fine. OptiSender retries the API connection every 5 seconds; start OpenGolfSim at any point and the next retry window will connect.
+If the simulator is not yet running when OptiSender starts, that is fine. OptiSender retries each enabled connection every 5 seconds; start the simulator at any point and the next retry window will connect.
+
+Open Connect (`127.0.0.1:921`) is enabled by default. To use OpenGolfSim instead of, or as well as, Open Connect, tick **OpenGolfSim** in the overlay or edit `targets.json`.
 
 ### 2. Run OptiSender
 
@@ -94,8 +96,8 @@ python OptiSender.py
 |---|---|
 | OptiShot 2 USB detected | **Hardware mode** — live swing data from the mat |
 | OptiShot 2 not found | **Simulation mode** — synthetic packets for testing |
-| OpenGolfSim not running | Shots processed locally and printed to console; transmitted once API connects |
-| OpenGolfSim running | Shot telemetry forwarded in real time |
+| Simulator not running | Shots processed locally and printed to console; transmitted once the connection is made |
+| Simulator running | Shot telemetry forwarded in real time to every enabled target |
 
 ### 4. Keyboard controls
 
@@ -109,7 +111,7 @@ All shortcuts require holding **Ctrl** first. This avoids conflicts with the sim
 | `Ctrl + D` | Always | Toggle overlay window always-on-top |
 | `Ctrl + T` | Always | Open / close the Tuning Editor window |
 
-> **Club selection** is driven automatically by the OpenGolfSim API — when you change clubs in-game the active club updates in OptiSender. Manual keyboard cycling has been removed.
+> **Club selection** is driven automatically by the connected simulator — when you change clubs in-game the active club updates in OptiSender. Manual keyboard cycling has been removed.
 
 > **Note:** Keyboard controls require `pynput` (`pip install pynput`). If pynput is not installed the program still runs — controls are simply disabled.
 
@@ -128,8 +130,11 @@ A narrow floating window appears in the top-left corner of the screen when OptiS
 | Connection status | `● Connected` (green) or `◌ Simulation` (grey) |
 | B / H indicators | Ball detection ON/OFF and Left/Right handed mode (color-coded: orange = RH, blue = LH) |
 | **Tuning button** | Opens the Tuning Editor window (same as `Ctrl+T`) |
-| Club name | Current club as reported by OpenGolfSim |
+| **Open Connect / OpenGolfSim checkboxes** | Tick to send shots to that simulator; untick to stop. Takes effect immediately and is saved to `targets.json`. The dot shows the connection: green = connected, orange = enabled but not connected yet, grey = off. Both can be on at once |
+| Club name | Current club as reported by the connected simulator(s) |
 | Metrics grid | Club Speed, Face Angle, Path, Contact, Smash Factor from last shot |
+
+Open Connect club ids without a tuning entry (`2W`, `4W`, `7W`, `2H`, `3H`, `4H`, `1I`, `2I`) use the nearest tuned club (`3W`, `3W`, `5W`, `5H`, `5H`, `5H`, `3I`, `3I`).
 
 The overlay window can be dragged anywhere on screen. The **📌 pin button** in the title bar toggles always-on-top (`Ctrl+D`).
 
@@ -290,8 +295,8 @@ The handedness conversion is applied internally before physics so the same face/
 
 The **Send Shot** button is disabled (grey) after a shot is sent and shows `◌ Processing…` until the system is ready for the next shot:
 
-- **Primary trigger:** OpenGolfSim sends a `result` message back (shot has been processed and displayed in-game). Ready is signalled 5 seconds after the result to allow the game screen to fully update.
-- **Fallback timer:** If the API is not connected or does not respond, the button re-enables automatically after 12 seconds — matching the time needed for the game engine to cycle.
+- **Primary trigger (OpenGolfSim only):** OpenGolfSim sends a `result` message back (shot has been processed and displayed in-game). Ready is signalled 3 seconds after the result to allow the game screen to fully update.
+- **Fallback timer:** Open Connect has no result message (only a `200` acknowledgement that the shot was received), and OpenGolfSim may not be connected or may not respond. In those cases the button re-enables automatically after 12 seconds — matching the time needed for the game engine to cycle.
 
 This prevents shots from being sent before the simulator is ready to receive them, mirroring the green LED behaviour of the physical pad.
 
@@ -385,7 +390,7 @@ The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl
                      │ BallFlight object
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│              OpenGolfSim TCP API  127.0.0.1:3111        │
+│        OpenGolfSim TCP API  127.0.0.1:3111  (optional)  │
 │                                                         │
 │  Heartbeat (every 0.5 s):                               │
 │    {"type":"device","status":"ready"}                   │
@@ -402,6 +407,21 @@ The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl
 │  Inbound events (server-pushed):                        │
 │    type=player      → updates active club from API      │
 │    type=result      → carry / total / roll displayed    │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  Open Connect v1 TCP  127.0.0.1:921  (default; MuniGolf)│
+│                                                         │
+│  Ready message on connect, then per shot:               │
+│    {"DeviceID":"OptiSender","Units":"Yards",            │
+│     "ShotNumber":<n>,"APIversion":"1",                  │
+│     "BallData":{"Speed":<mph>,"SpinAxis":<deg>,         │
+│       "TotalSpin":<rpm>,"HLA":<deg>,"VLA":<deg>},       │
+│     "ClubData":{...},"ShotDataOptions":{...}}           │
+│                                                         │
+│  Inbound:                                               │
+│    Code=200  → shot received                            │
+│    Code=201  → Player.Club updates the active club      │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -567,7 +587,10 @@ When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (
 
 | File | Role |
 |---|---|
-| [OptiSender.py](OptiSender.py) | Entry point; main loop, API socket, keyboard handler, physics reload |
+| [OptiSender.py](OptiSender.py) | Entry point; main loop, keyboard handler, physics reload |
+| [api_targets.py](api_targets.py) | Simulator connections — Open Connect (port 921) and OpenGolfSim (port 3111); per-target socket, reconnect, protocol; reads `targets.json` |
+| [targets.json](targets.json) | Which simulators to send to (`enabled`), host/port, and `club_source` (whose club selection drives OptiSender). Defaults to Open Connect only |
+| [test_open_connect.py](test_open_connect.py) | Checks the Open Connect target against a mock relay (connect, shot payload, club change, reconnect); `python test_open_connect.py` |
 | [opti_reader.py](opti_reader.py) | HID device open/close, command writes, raw 60-byte reads |
 | [data_filters.py](data_filters.py) | Duplicate and validity filters before processing |
 | [shot_processor.py](shot_processor.py) | 60-byte packet parser; speed, face angle, path, contact |
