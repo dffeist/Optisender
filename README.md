@@ -77,12 +77,12 @@ pip install pynput
 OptiSender is designed to run **alongside** your golf simulator at the same time.  
 Recommended start order:
 
-1. Launch your simulator first. For **MuniGolf**, set *Launch Monitor* to **Open Connect API** and leave the relay *Listen Port* at `921`.
+1. Launch your simulator first. For **MuniGolf**, set *Launch Monitor* to **Open Connect API** and leave the relay *Listen Port* at `9210`.
 2. Then launch OptiSender — it will connect to the running relay automatically.
 
 If the simulator is not yet running when OptiSender starts, that is fine. OptiSender retries each enabled connection every 5 seconds; start the simulator at any point and the next retry window will connect.
 
-Open Connect (`127.0.0.1:921`) is enabled by default. To use OpenGolfSim instead of, or as well as, Open Connect, tick **OpenGolfSim** in the overlay or edit `targets.json`.
+Open Connect (`127.0.0.1:9210`) is enabled by default. To use OpenGolfSim instead of, or as well as, Open Connect, tick **OpenGolfSim** in the overlay or edit `targets.json`.
 
 ### 2. Run OptiSender
 
@@ -410,7 +410,7 @@ The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│  Open Connect v1 TCP  127.0.0.1:921  (default; MuniGolf)│
+│  Open Connect v1 TCP  127.0.0.1:9210 (default; MuniGolf)│
 │                                                         │
 │  Ready message on connect, then per shot:               │
 │    {"DeviceID":"OptiSender","Units":"Yards",            │
@@ -588,7 +588,7 @@ When the Tuning Editor saves or reverts, it sets `tuning_editor.reload_needed` (
 | File | Role |
 |---|---|
 | [OptiSender.py](OptiSender.py) | Entry point; main loop, keyboard handler, physics reload |
-| [api_targets.py](api_targets.py) | Simulator connections — Open Connect (port 921) and OpenGolfSim (port 3111); per-target socket, reconnect, protocol; reads `targets.json` |
+| [api_targets.py](api_targets.py) | Simulator connections — Open Connect (port 9210) and OpenGolfSim (port 3111); per-target socket, reconnect, protocol; reads `targets.json` |
 | [targets.json](targets.json) | Which simulators to send to (`enabled`), host/port, and `club_source` (whose club selection drives OptiSender). Defaults to Open Connect only |
 | [test_open_connect.py](test_open_connect.py) | Checks the Open Connect target against a mock relay (connect, shot payload, club change, reconnect); `python test_open_connect.py` |
 | [opti_reader.py](opti_reader.py) | HID device open/close, command writes, raw 60-byte reads |

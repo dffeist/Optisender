@@ -51,7 +51,7 @@ def main():
     # Simulation Input State
     sim_input = {"trigger": False, "club_shift": 0, "toggle_ball": False,
                  "toggle_handed": False, "toggle_pin": False, "toggle_tuning": False,
-                 "target_changes": queue.Queue()}
+                 "target_changes": queue.Queue(), "target_actions": queue.Queue()}
     using_ball = True
     left_handed = False
     print("Ball Mode: ON (press 'B' to toggle)")
@@ -187,6 +187,18 @@ def main():
                         print(f"*** {target.label}: {'ENABLED' if tflag else 'DISABLED'} ***")
             if targets_changed:
                 save_targets_config(targets_cfg, targets)
+
+            # Apply Reconnect / Send Ready requests from the overlay buttons to every enabled target
+            while True:
+                try:
+                    action = sim_input["target_actions"].get_nowait()
+                except queue.Empty:
+                    break
+                for target in targets:
+                    if action == "reconnect" and target.reconnect():
+                        print(f"*** {target.label}: RECONNECTING ***")
+                    elif action == "ready":
+                        target.send_ready()
 
             # Service each API target (reconnect, heartbeat, incoming messages)
             for target in targets:

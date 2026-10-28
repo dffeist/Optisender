@@ -68,7 +68,7 @@ Long values such as `In-to-Out 12.3°` no longer overflow the 160 px overlay. Ea
 
 ### Target renamed: GSPro Connect → Open Connect
 
-The "GSPro Connect" target already spoke **Open Connect v1**, the shared launch-monitor protocol (originated by GSPro, `APIversion` `"1"`). It is now named for the protocol rather than for one simulator that uses it. The wire format is unchanged; any simulator that accepts Open Connect works, including **MuniGolf** (its *Open Connect API* launch-monitor option, relay port `921`) and GSPro.
+The "GSPro Connect" target already spoke **Open Connect v1**, the shared launch-monitor protocol (originated by GSPro, `APIversion` `"1"`). It is now named for the protocol rather than for one simulator that uses it. The wire format is unchanged; any simulator that accepts Open Connect works, including **MuniGolf** (its *Open Connect API* launch-monitor option, relay port `9210`) and GSPro.
 
 | v1.01 | v1.02 |
 |---|---|
@@ -79,7 +79,7 @@ The "GSPro Connect" target already spoke **Open Connect v1**, the shared launch-
 
 ### ⚠ Default target changed — Open Connect is on, OpenGolfSim is off
 
-**Open Connect (`127.0.0.1:921`, MuniGolf's relay) is now the default target and is listed first. OpenGolfSim is kept but off by default.** In v1.01 it was the other way round.
+**Open Connect (`127.0.0.1:9210`, MuniGolf's relay) is now the default target and is listed first. OpenGolfSim is kept but off by default.** In v1.01 it was the other way round.
 
 If you use OpenGolfSim and have no `targets.json`, shots will stop reaching it after the upgrade. To restore it, tick **OpenGolfSim** in the overlay (saved automatically) or set `"opengolfsim": { "enabled": true }` in `targets.json`.
 
@@ -87,7 +87,7 @@ If you use OpenGolfSim and have no `targets.json`, shots will stop reaching it a
 
 The config key was renamed and **old keys are not migrated**. If you edited `targets.json` under v1.01:
 
-- Rename the `gspro` block to `openconnect` (settings under the old key are ignored, and `openconnect` falls back to its defaults: enabled, `127.0.0.1:921`).
+- Rename the `gspro` block to `openconnect` (settings under the old key are ignored, and `openconnect` falls back to its defaults: enabled, `127.0.0.1:9210`).
 - If `club_source` is `"gspro"`, change it to `"openconnect"`.
 - Your `opengolfsim` block is read as before, so an OpenGolfSim target you had enabled stays enabled alongside the new default Open Connect target. Untick one in the overlay if you only want a single simulator.
 
@@ -98,7 +98,7 @@ New default `targets.json`:
 ```json
 {
   "club_source": "any",
-  "openconnect": { "enabled": true,  "host": "127.0.0.1", "port": 921,
+  "openconnect": { "enabled": true,  "host": "127.0.0.1", "port": 9210,
                    "device_id": "OptiSender", "send_club_data": true },
   "opengolfsim": { "enabled": false, "host": "127.0.0.1", "port": 3111 }
 }

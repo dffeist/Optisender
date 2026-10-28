@@ -131,6 +131,20 @@ def main():
     pump(target)
     assert target.status == "connected"
 
+    # manual Send Ready -> another ready message on the same connection
+    count = len(relay.received)
+    assert target.send_ready()
+    assert wait_for(lambda: len(relay.received) > count), "manual ready not received"
+    assert relay.received[-1]["ShotDataOptions"]["LaunchMonitorIsReady"] is True
+    assert relay.received[-1]["ShotDataOptions"]["ContainsBallData"] is False
+    assert target.status == "connected"
+
+    # Reconnect button -> connection dropped, then a fresh connection with a ready message
+    count = len(relay.received)
+    assert target.reconnect() and target.status == "connecting"
+    assert wait_for(lambda: (pump(target, 0.1) or target.status == "connected") and len(relay.received) > count, 5.0), \
+        "did not reconnect on request"
+
     # relay drops the client -> target notices and reconnects with a fresh ready message
     count = len(relay.received)
     relay.drop_client()
@@ -141,6 +155,7 @@ def main():
     # disabled target neither connects nor sends
     target.set_enabled(False)
     assert target.status == "off" and not target.send_shot(ball, metrics, "7I")
+    assert not target.send_ready() and not target.reconnect()
 
     target.close()
     relay.close()
@@ -149,7 +164,7 @@ def main():
     cfg = load_targets_config(path="does-not-exist.json")
     names = [t.name for t in build_targets(cfg)]
     assert names == ["openconnect", "opengolfsim"], names
-    assert cfg["openconnect"]["enabled"] and cfg["openconnect"]["port"] == 921
+    assert cfg["openconnect"]["enabled"] and cfg["openconnect"]["port"] == 9210
     assert not cfg["opengolfsim"]["enabled"]
     print("All Open Connect checks passed.")
 

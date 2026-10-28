@@ -22,6 +22,10 @@ _Avoid_: Muni
 The part of MuniGolf that listens for **Open Connect** clients on the PC and passes their shots on to the game.
 _Avoid_: Listener
 
+**Second Window**:
+MuniGolf's separate shot-data window, titled "MuniGolf - Second Window". It shows what MuniGolf received and computed for each shot (ball and club values, carry, total, apex, offline, air time).
+_Avoid_: Second screen, stats window, MuniGolf display
+
 **OpenGolfSim API**:
 OpenGolfSim's own, separate protocol. Not **Open Connect**.
 _Avoid_: Open Connect (when meaning OpenGolfSim)
@@ -75,6 +79,12 @@ _Avoid_: Inside/Out, InOut, OutIn, positive/negative path, On Plane, Straight (f
 **Shot Shape**:
 The **Golfer frame** name for how the ball curves: Straight, Fade, Slice, Draw or Hook. For an RH golfer Fade and Slice curve left-to-right and Draw and Hook curve right-to-left; for an LH golfer it is the reverse. Slice and Hook are the stronger curves.
 _Avoid_: Ball flight shape, curve direction
+
+### Reference data
+
+**Ninety Golfer**:
+The reference amateur used when generating example swing data: a mid-handicap golfer who shoots about 90 (roughly an 18 handicap), with the top-of-range club speed for each club. "90 handicapper" is not a real handicap, since indexes stop at 54.
+_Avoid_: 90 handicapper, average golfer
 
 ## Relationships
 

@@ -18,7 +18,7 @@ TARGETS_FILE = os.path.join(_exe_dir(), "targets.json")
 
 DEFAULT_CONFIG = {
     "club_source": "any",  # "any", "openconnect" or "opengolfsim": whose club selection drives OptiSender
-    "openconnect": {"enabled": True, "host": "127.0.0.1", "port": 921,
+    "openconnect": {"enabled": True, "host": "127.0.0.1", "port": 9210,
                     "device_id": "OptiSender", "send_club_data": True},
     "opengolfsim": {"enabled": False, "host": "127.0.0.1", "port": 3111},
 }
@@ -135,6 +135,27 @@ class ApiTarget:
             self._drop()
             return False
 
+    def reconnect(self):
+        """Drop the connection and connect again on the next poll, which sends a fresh ready message."""
+        if not self.enabled:
+            return False
+        self._drop()
+        self._last_attempt = 0.0
+        return True
+
+    def send_ready(self):
+        """Send the ready message now, without dropping the connection."""
+        if not self.enabled or not self.sock:
+            return False
+        try:
+            self._send_ready()
+            print(f">> Ready sent to {self.label}.")
+            return True
+        except Exception as e:
+            print(f"Error sending ready to {self.label}: {e}")
+            self._drop()
+            return False
+
     def close(self):
         self._drop()
 
@@ -190,6 +211,7 @@ class ApiTarget:
 
     # Protocol hooks -------------------------------------------------------
     def _on_connect(self): pass
+    def _send_ready(self): raise NotImplementedError
     def _keep_alive(self): pass
     def _handle_message(self, msg): return []
     def _shot_payload(self, ball, metrics, club): raise NotImplementedError
@@ -267,7 +289,7 @@ class OpenConnectTarget(ApiTarget):
             "IsHeartBeat": False,
         }
 
-    def _on_connect(self):
+    def _send_ready(self):
         ready = {
             "DeviceID": self.device_id,
             "Units": "Yards",
@@ -276,6 +298,9 @@ class OpenConnectTarget(ApiTarget):
             "ShotDataOptions": self._options(False, False),
         }
         self.sock.sendall(json.dumps(ready).encode('utf-8'))
+
+    def _on_connect(self):
+        self._send_ready()
 
     def _handle_message(self, msg):
         code = msg.get("Code")

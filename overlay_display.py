@@ -15,6 +15,7 @@ FONT_VAL  = ("Consolas", 20)
 FONT_LBL  = ("Consolas", 18)
 WARN_COLOR = "#ffa726"
 WIDTH     = 160
+FULL_HEIGHT = 648
 TARGET_ROWS = [("openconnect", "Open Connect"), ("opengolfsim", "OpenGolfSim")]
 FIT_WIDTH = WIDTH - 14   # label width available after the frame padding
 MIN_VAL_SIZE = 8
@@ -50,9 +51,10 @@ class OverlayDisplay:
         self._root.title("OptiSender")
         self._root.overrideredirect(True)  # remove OS title bar and buttons
         self._root.configure(bg=BG)
-        self._root.geometry(f"{WIDTH}x620+13+27")
+        self._root.geometry(f"{WIDTH}x{FULL_HEIGHT}+13+27")
         self._root.attributes("-topmost", True)
         self._always_on_top = True
+        self._collapsed = False
         self._left_handed = False
         self._drag_x = 0
         self._drag_y = 0
@@ -67,6 +69,7 @@ class OverlayDisplay:
         # ── Title / drag bar ─────────────────────────────────────────
         title_bar = tk.Frame(root, bg="#2a4a6b", cursor="fleur")
         title_bar.pack(fill="x")
+        self._title_bar = title_bar
         title_lbl = tk.Label(title_bar, text="⛳ OptiSender  ✥", bg="#2a4a6b", fg="#ffffff",
                              font=("Consolas", 11, "bold"), pady=4, cursor="fleur")
         title_lbl.pack(side="left", padx=6)
@@ -80,6 +83,7 @@ class OverlayDisplay:
         for widget in (title_bar, title_lbl):
             widget.bind("<ButtonPress-1>", self._drag_start)
             widget.bind("<B1-Motion>",     self._drag_motion)
+            widget.bind("<Double-Button-1>", self._toggle_collapse)
 
         # ── Connection status ─────────────────────────────────────────
         self._conn_lbl = tk.Label(root, text="● Connected", bg=BG,
@@ -126,6 +130,17 @@ class OverlayDisplay:
             dot = tk.Label(row, text="●", bg=BG, fg=DIM, font=("Consolas", 10, "bold"))
             dot.pack(side="right")
             self._target_dots[name] = dot
+
+        # ── Reconnect / manual ready for every enabled target ─────────
+        actions = tk.Frame(root, bg=BG)
+        actions.pack(fill="x", padx=5, pady=(2, 0))
+        for text, action in (("Reconnect", "reconnect"), ("Send Ready", "ready")):
+            tk.Button(
+                actions, text=text, bg="#2a4a6b", fg="#ffffff",
+                font=("Consolas", 8, "bold"), relief="flat", cursor="hand2",
+                activebackground="#3a5a7b", activeforeground="#ffffff",
+                command=lambda a=action: self._handle_target_action(a)
+            ).pack(side="left", fill="x", expand=True, padx=1)
 
         _sep(root)
 
@@ -243,6 +258,17 @@ class OverlayDisplay:
     def _handle_target_click(self, name):
         if self._sim_input:
             self._sim_input["target_changes"].put((name, self._target_vars[name].get()))
+
+    def _handle_target_action(self, action):
+        if self._sim_input:
+            self._sim_input["target_actions"].put(action)
+
+    def _toggle_collapse(self, event=None):
+        """Double-click on the title bar: shrink the window to just the bar, or restore it."""
+        self._collapsed = not self._collapsed
+        self._root.update_idletasks()
+        height = self._title_bar.winfo_reqheight() if self._collapsed else FULL_HEIGHT
+        self._root.geometry(f"{WIDTH}x{height}")  # size only, so the window keeps its position
 
     def _toggle_pin(self):
         self._always_on_top = not self._always_on_top
