@@ -1,6 +1,11 @@
 # Left-handed VLA issue: saved for a future update
 
-Saved 2026-10-28. NOT fixed. Found by reading the code; not yet confirmed with a real left-handed swing on the pad.
+Saved 2026-10-28. **Fixed on branch `lh-vla-fix`** (see Status below). Found by reading the code; not yet confirmed with a real left-handed swing on the pad.
+
+## Status
+
+- Done on the branch: `calculate_ball_flight(metrics, club, left_handed=False)` flips the launch-angle sign for left-handers; `OptiSender.py` passes `left_handed`; `test_ballphysics.py` covers both hands; right-handed output verified identical (378 Test Data rows).
+- Not yet done: a left-handed shot sent to MuniGolf to confirm the displayed VLA; a real left-handed swing on the pad.
 
 ## The problem
 

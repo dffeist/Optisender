@@ -18,10 +18,11 @@ class OptiReader:
         self.device = None
         self.is_connected = False
 
-    def connect(self):
+    def connect(self, quiet=False):
         """
         Opens the HID device and performs the initialization sequence
-        found in opti_init (usbcode.cpp).
+        found in opti_init (usbcode.cpp). quiet=True suppresses the failure message,
+        for retries where nothing has changed since the last failure.
         """
         try:
             self.device = hid.device()
@@ -36,7 +37,8 @@ class OptiReader:
             print(f"OptiShot connected: {self.device.get_product_string()}")
             return True
         except Exception as e:
-            print(f"HID Connection Error: {e}")
+            if not quiet:
+                print(f"HID Connection Error: {e}")
             self.is_connected = False
             return False
 
@@ -91,7 +93,7 @@ class OptiReader:
             pass
         self.device = None
         self.is_connected = False
-        return self.connect()
+        return self.connect(quiet=True)   # only called after a failure was already reported
 
     def disconnect(self):
         """

@@ -2,6 +2,10 @@
 
 ## What's New since v1.02
 
+### Quieter Terminal While the Pad Is Unplugged
+
+OptiSender retries the OptiShot every 10 s while in simulation mode. Those silent retries no longer print `[DEVICE] Attempting to reconnect to OptiShot...` and `HID Connection Error: open failed` each time. The terminal now shows only status changes: the first failure at startup, the switch to simulation mode when the pad disconnects, and the reconnect when it returns. Covered by `test_opti_reader.py`.
+
 ### Golfer-Frame Labels (console and overlay now agree)
 
 Face angle, club path and shot shape are **world-frame** values everywhere in the pipeline: positive is right of the target line, for both hands. Handedness only changes the *names* shown to the golfer. All labels are now built once in the new `swing_labels.py` and the same strings go to the console and the overlay (previously the console showed unconverted LH values and disagreed with the overlay). Terms are defined in `CONTEXT.md`.
@@ -21,7 +25,7 @@ Face angle, club path and shot shape are **world-frame** values everywhere in th
 
 **Heel/Toe swapped — needs one physical check.** Heel and Toe were previously reversed for RH relative to RepliShot's own face and path sign conventions. Sensor index 0 is now the heel end (nearest an RH golfer) and 7 the toe end, mirrored for LH; "Extreme Toe" is now "Far Toe". This is inferred from RepliShot's source and pad photo, not yet confirmed on a pad: hit one clearly off-toe shot and confirm it reads Toe.
 
-**Known deviation (unchanged on purpose):** `ballphysics.py` adds `face_angle * 0.3` to the vertical launch angle using the signed world face, so a mirrored LH swing gets a different vertical launch than its RH twin. Left as-is per the decision not to change flight physics.
+**Fixed (branch `lh-vla-fix`):** `ballphysics.py` used to add `face_angle * 0.3` to the vertical launch angle using the signed world face, so a Closed left-handed face raised the launch instead of lowering it. `calculate_ball_flight` now takes `left_handed` and the launch adjustment follows Open / Closed: an open face adds loft for either hand. Right-handed output is unchanged (all 378 rows of the Test Data sheet in `SwingData.xlsx` still match). Direction, spin and ball speed are unchanged for both hands. Covered by `test_ballphysics.py`.
 
 ### Overlay Values Auto-Fit the Window Width
 

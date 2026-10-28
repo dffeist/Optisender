@@ -202,7 +202,7 @@ The ratio of ball speed to club head speed. A higher smash factor means more ene
 
 #### Launch Angle / Vla — Vertical Launch Angle (per club)
 
-The base vertical launch angle in degrees, before face angle adds a small adjustment (±a few degrees for very open or closed faces).
+The base vertical launch angle in degrees, before face angle adds a small adjustment (±a few degrees for very open or closed faces). An open face adds loft and a closed face removes it, for either hand.
 
 | Value direction | Effect |
 |---|---|
@@ -246,7 +246,7 @@ Club Head Speed (from sensor × Speed Calibration)
               │
               ├─── face_angle through Face Compression (tanh) = eff_face
               │
-              ├─── Vla + (face_angle × 0.3) ──────────────────→ Vertical Launch Angle
+              ├─── Vla + (open_face × 0.3) ───────────────────→ Vertical Launch Angle
               ├─── (eff_face × 0.85) + (path × 0.15) ─────────→ Horizontal Launch Angle (start direction)
               └─── eff_face − path ────────────────────────────→ Spin Axis (curve direction)
                                                                    (positive = fade/slice RH)
@@ -379,7 +379,7 @@ The Manual Simulation Window injects metrics directly — no HID encoding. `Ctrl
 │  eff_face = k × tanh(face_angle / k)   [compression]   │
 │                                                         │
 │  Ball Speed   = club_speed × BallSpeed − contact_penalty│
-│  Launch Angle = Vla + (face_angle × 0.3)               │
+│  Launch Angle = Vla + (open_face × 0.3)                │
 │  Horiz. Angle = (eff_face × 0.85) + (path × 0.15)      │
 │  Total Spin   = BS  (per-club base spin from tuning)    │
 │  Spin Axis    = eff_face − path                         │

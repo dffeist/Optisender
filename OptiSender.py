@@ -246,7 +246,7 @@ def main():
             if simulation_mode and not reader.is_connected:
                 if now - last_reconnect_attempt > RECONNECT_INTERVAL:
                     last_reconnect_attempt = now
-                    print("[DEVICE] Attempting to reconnect to OptiShot...")
+                    # Retry silently; only the switch to simulation mode and the reconnect are reported
                     if reader.reconnect():
                         simulation_mode = False
                         last_keep_alive_time = now
@@ -295,7 +295,7 @@ def main():
                 metrics = None
 
             if metrics:
-                ball = physics.calculate_ball_flight(metrics, shot_club)
+                ball = physics.calculate_ball_flight(metrics, shot_club, left_handed)
 
                 # Physics is world-frame; labels shown to the golfer are built once for console and overlay.
                 labels = describe_swing(metrics, ball, left_handed)

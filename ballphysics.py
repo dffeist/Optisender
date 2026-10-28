@@ -39,10 +39,11 @@ class PhysicsEngine:
         k = self.params.get("FaceCompression", {}).get("k", 15.0)
         return k * math.tanh(face_angle / k)
 
-    def calculate_ball_flight(self, metrics, club_name):
+    def calculate_ball_flight(self, metrics, club_name, left_handed=False):
         """
         Calculates ball flight based on metrics dictionary from ShotProcessor.
-        Assumes right-handed golfer conventions throughout.
+        Direction and spin are world frame (positive = right of the target line) for both hands.
+        Handedness only matters for launch angle, which follows Open / Closed (see CONTEXT.md).
         """
         ball = BallFlight()
 
@@ -62,9 +63,12 @@ class PhysicsEngine:
         contact_penalty = abs(face_contact) * 0.03
         ball.ball_speed = club_speed * (smash - contact_penalty)
 
-        # 2. Vertical Launch Angle — raw face_angle retained (loft relationship, less sensor-error sensitive)
+        # 2. Vertical Launch Angle — raw face_angle retained (loft relationship, less sensor-error sensitive).
+        # An open face adds loft. Open is positive world frame for a right-hander and negative for a
+        # left-hander, so the sign follows the hand.
+        open_face = -face_angle if left_handed else face_angle
         base_vla = club_params.get("Vla", 12.0)
-        ball.launch_angle = base_vla + (face_angle * 0.3)
+        ball.launch_angle = base_vla + (open_face * 0.3)
 
         # Compressed face angle for direction/spin: tanh leaves small angles (~0-10 deg) nearly
         # unchanged while dampening extreme readings (+-30 deg compresses ~48%) where sensor error peaks.
