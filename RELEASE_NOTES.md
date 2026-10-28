@@ -2,6 +2,12 @@
 
 ## What's New since v1.02
 
+### Toe/Heel Gear Effect (off by default)
+
+New **Gear Effect (toe/heel)** slider in the Tuning editor's Global section, stored as `GearEffect` (percent) in `tuning.json`; **0 is the default and leaves every shot exactly as before.** Above 0, off-centre strikes shift the start direction and spin axis: a toe strike starts toward the toe side and draws, a heel strike starts toward the heel side and fades, mirrored for a left-hander. The pad's Heel and Toe readings (about 0.3 in off centre, within ball-placement noise) get no effect; the Far readings (about 0.9 in) shift start direction 0.75 deg and spin axis 4 deg at full strength, capped at 1.5 deg and 8 deg beyond that. Scaled by club (Driver 100%, woods 75%, 5 hybrid 50%, irons and wedges 25%, putter 0). Ball speed, launch angle and spin are untouched. The direction uses the same pad-index convention as the Toe/Heel labels, so the labels and the ball flight cannot disagree for either hand. The basis and the open questions are in `TOE_HEEL_RESEARCH.md`; the heel/toe direction still needs a physical check on the pad.
+
+The Manual Simulation window gained a **Contact (-heel/+toe)** slider (golfer frame) so toe and heel shots can be tested without a pad. Covered by `test_gear_effect.py`.
+
 ### Handedness Follows the Simulator
 
 MuniGolf's player message (Open Connect code 201) includes the golfer's hand (`"Handed":"LH"`), which OptiSender used to ignore, so it stayed right-handed unless toggled by hand. The Open Connect target now reports the hand (`("hand", "LH"/"RH")`) the first time it is seen on a connection and whenever it changes, and the main loop switches OptiSender, the overlay and the Manual Simulation window to match, printing `*** HANDEDNESS: Left-Handed (from Open Connect) ***`. It follows the same `club_source` rule as the club. Because it only acts on a first report or a change, a manual Ctrl+H toggle is not overwritten by later repeated messages. OpenGolfSim is unchanged: its player message has no documented handedness field. Covered by the handedness checks in `test_open_connect.py`.

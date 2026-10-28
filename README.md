@@ -184,6 +184,33 @@ The compression uses a `tanh`-based function internally (parameter `k` stored in
 - Lower % → more slice/hook curve, more lateral ball displacement for open/closed face readings
 - Higher % → flatter shot shape, less penalty for sensor noise at extreme face angles
 
+#### Gear Effect — toe/heel (0% – 100%)
+
+How much a toe or heel strike changes the start direction and spin axis. **0% is the default and means off**: shots are exactly as before (an off-centre strike only loses a little ball speed). Higher values add the gear effect described below, scaled by this percentage.
+
+The pad reports where the club passed over its sensors, one step (about 0.59 in) per sensor, so Heel and Toe are only about 0.3 in off centre. That is within normal ball-placement noise, so they get **no** gear effect. Only the *Far* readings and beyond do. Full-strength values for a Driver (other clubs are scaled, see below):
+
+| Pad reading | Off centre | Start direction shift | Spin axis shift |
+|---|---|---|---|
+| Center, Heel, Toe | up to about 0.3 in | none | none |
+| Far Toe / Far Heel | about 0.9 in | 0.75° | 4° |
+| Furthest (index 0-1 or 6-7) | 1.5 in and beyond | 1.5° (capped) | 8° (capped) |
+
+Values between those readings are interpolated. Ball speed is not changed by this setting; it keeps the existing small loss for any off-centre strike.
+
+**Direction follows the golfer's hand.** A toe strike starts toward the toe side and draws, and a heel strike starts toward the heel side and fades, so for the same pad reading the labels and the ball flight swap between hands:
+
+| | Right-handed | Left-handed |
+|---|---|---|
+| Toe strike | starts right, curves left (draw) | starts left, curves right (draw) |
+| Heel strike | starts left, curves right (fade) | starts right, curves left (fade) |
+
+(Start direction and curve are world frame: right and left of the target line.) The same sensor reading is the Toe end for one hand and the Heel end for the other, and the ball flies the same in the world frame either way.
+
+**Scaled by club:** Driver 100%, 3 wood and 5 wood 75%, 5 hybrid 50%, irons and wedges 25%, putter 0%.
+
+The Manual Simulation window has a **Contact (-heel/+toe)** slider (in golfer terms, so + is always toward the toe) for testing this.
+
 ### Per-club settings
 
 Select a club from the dropdown. The three sliders update to show that club's current values and their valid range (semi-pro floor to 20-handicap amateur ceiling).

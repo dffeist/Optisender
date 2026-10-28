@@ -167,6 +167,17 @@ def generate_simulated_shot(club_name="Driver", shot_type=None, verbose=True, sp
 
 # ── SimulationWindow ──────────────────────────────────────────────────────────
 
+def contact_metrics(toe_steps, left_handed):
+    """Pad readings (contact value, lowest and highest lit back sensor) for a strike `toe_steps` sensor
+    steps toward the toe (negative = toward the heel). Higher pad indices are the toe end for a
+    right-hander and the heel end for a left-hander, matching swing_labels.contact_label."""
+    raw_contact = toe_steps * (-1.0 if left_handed else 1.0)
+    centre = 3.5 + raw_contact
+    lo = max(0, min(7, math.floor(centre)))
+    hi = max(0, min(7, math.ceil(centre)))
+    return raw_contact, lo, hi
+
+
 class _ClubSelectorPopup:
     def __init__(self, parent, current_club, on_select):
         top = tk.Toplevel(parent)
@@ -313,10 +324,12 @@ class SimulationWindow:
         self._speed_var = tk.DoubleVar(master=win, value=90.0)
         self._face_var  = tk.DoubleVar(master=win, value=0.0)
         self._path_var  = tk.DoubleVar(master=win, value=0.0)
+        self._contact_var = tk.DoubleVar(master=win, value=0.0)   # golfer frame: + toward the toe
 
         self._make_slider(win, "Club Speed (mph)", self._speed_var,  10,      120,      0.5, pad)
         self._make_slider(win, "Face Angle (° +right)", self._face_var,  -20,       20,      1.0, pad)
         self._make_slider(win, "Club Path (° +right)",  self._path_var,  PATH_MIN, PATH_MAX, 1.0, pad)
+        self._make_slider(win, "Contact (-heel/+toe)", self._contact_var, -3.5, 3.5, 0.5, pad)
 
         # Status / ready indicator
         self._status_var = tk.StringVar(master=win, value="")
@@ -383,14 +396,16 @@ class SimulationWindow:
         # changes the labels shown. Raw pad face angle has the opposite sign, so negate it here.
         sensor_face = -face_angle
         sensor_path = path_deg
+        toe_steps = self._contact_var.get()
+        contact, lowest, highest = contact_metrics(toe_steps, self._left_handed)
 
         metrics = {
             "speed":        speed,
             "face_angle":   sensor_face,
             "path_deg":     sensor_path,
-            "contact":      0.0,
-            "raw_min_back": 3,
-            "raw_max_back": 4,
+            "contact":      contact,
+            "raw_min_back": lowest,
+            "raw_max_back": highest,
             "path":         0,
             "smash_factor": 1.0,
         }
@@ -401,7 +416,7 @@ class SimulationWindow:
         hand = "LH" if self._left_handed else "RH"
         self._status_var.set(
             f"◌ Processing [{hand}] {club}  Speed={speed:.1f}  "
-            f"Face={face_angle:+.1f}°  Path={path_deg:+.1f}°"
+            f"Face={face_angle:+.1f}°  Path={path_deg:+.1f}°  Contact={toe_steps:+.1f}"
         )
         self._queue.put({"metrics": metrics, "club": club})
 

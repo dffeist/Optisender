@@ -108,6 +108,7 @@ class TuningEditor:
                 data = json.load(f)
         except Exception:
             data = {}
+        data.setdefault("GearEffect", 0)   # older files lack it; keeps the dirty check from firing
         self._params       = copy.deepcopy(data)
         self._saved_params = copy.deepcopy(data)
 
@@ -170,7 +171,7 @@ class TuningEditor:
         self._win = tk.Toplevel(root)
         self._win.title("OptiSender — Tuning Editor")
         self._win.configure(bg=BG)
-        self._win.geometry("500x560+200+80")
+        self._win.geometry("500x600+200+80")
         self._win.resizable(False, False)
         self._win.protocol("WM_DELETE_WINDOW", self._on_close_button)
 
@@ -196,15 +197,20 @@ class TuningEditor:
 
         self._speed_cal_var = tk.DoubleVar(master=win)
         self._face_pct_var  = tk.IntVar(master=win)
+        self._gear_var      = tk.IntVar(master=win)
 
         # Pre-populate global variables before building sliders to ensure correct initial positions
         self._speed_cal_var.set(self._params.get("SpeedCalibration", 1.10))
         k_val = self._params.get("FaceCompression", {}).get("k", 15.0)
         self._face_pct_var.set(self._k_to_pct(k_val))
+        self._gear_var.set(int(self._params.get("GearEffect", 0)))
 
         self._build_slider_row(gf, "Speed Calibration", self._speed_cal_var,
                                1.0, 1.2, 0.01, fmt="{:.2f}", is_club_slider=False)
         self._build_slider_row(gf, "Face Compression", self._face_pct_var,
+                               0, 100, 1, fmt="{}%", is_club_slider=False)
+        # Toe/heel gear effect on start direction and spin axis (0 = off). Direction follows the golfer's hand.
+        self._build_slider_row(gf, "Gear Effect (toe/heel)", self._gear_var,
                                0, 100, 1, fmt="{}%", is_club_slider=False)
 
         # ── Club selector ─────────────────────────────────────────────────
@@ -323,6 +329,7 @@ class TuningEditor:
         self._speed_cal_var.set(self._params.get("SpeedCalibration", 1.10))
         k = self._params.get("FaceCompression", {}).get("k", 15.0)
         self._face_pct_var.set(self._k_to_pct(k))
+        self._gear_var.set(int(self._params.get("GearEffect", 0)))
 
         club_p = self._params.get(self._current_club, {})
         r      = CLUB_RANGES[self._current_club]
@@ -334,6 +341,7 @@ class TuningEditor:
     def _sync_params_from_sliders(self):
         self._params["SpeedCalibration"] = round(self._speed_cal_var.get(), 3)
         self._params.setdefault("FaceCompression", {})["k"] = self._pct_to_k(self._face_pct_var.get())
+        self._params["GearEffect"] = int(self._gear_var.get())
         self._params.setdefault(self._current_club, {})
         self._params[self._current_club]["BallSpeed"] = round(self._bs_var.get(),  3)
         self._params[self._current_club]["Vla"]       = round(self._vla_var.get(), 2)

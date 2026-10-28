@@ -2,6 +2,17 @@ import json
 import math
 import os
 
+# Gear effect from a toe or heel strike (see TOE_HEEL_RESEARCH.md). Contact is measured in pad sensor
+# steps off centre (about 0.59 in each). Each point is (steps off centre, start-direction shift in
+# degrees, spin-axis shift in degrees) for a Driver at full strength; values between points are
+# interpolated and beyond the last point they stay capped. The first point is a dead band: Heel and Toe
+# (half a step, about 0.3 in) are within normal ball-placement noise, so they only lose ball speed.
+GEAR_POINTS = ((0.5, 0.0, 0.0), (1.5, 0.75, 4.0), (3.5, 1.5, 8.0))
+# Gear effect is far smaller on irons and wedges. Clubs not listed here use IRON_GEAR_SCALE.
+GEAR_CLUB_SCALE = {"Driver": 1.0, "3W": 0.75, "5W": 0.75, "5H": 0.5, "Putter": 0.0}
+IRON_GEAR_SCALE = 0.25
+
+
 class BallFlight:
     def __init__(self):
         self.ball_speed = 0.0
@@ -39,11 +50,30 @@ class PhysicsEngine:
         k = self.params.get("FaceCompression", {}).get("k", 15.0)
         return k * math.tanh(face_angle / k)
 
+    @staticmethod
+    def _gear_magnitude(steps):
+        """(start-direction shift, spin-axis shift) in degrees for a strike `steps` sensor steps off
+        centre, at full strength. Magnitude only; the caller applies the sign for toe/heel and hand."""
+        if steps <= GEAR_POINTS[0][0]:
+            return 0.0, 0.0
+        for (x0, h0, a0), (x1, h1, a1) in zip(GEAR_POINTS, GEAR_POINTS[1:]):
+            if steps <= x1:
+                t = (steps - x0) / (x1 - x0)
+                return h0 + t * (h1 - h0), a0 + t * (a1 - a0)
+        return GEAR_POINTS[-1][1], GEAR_POINTS[-1][2]
+
+    def gear_strength(self, club_name):
+        """0..1: the Gear Effect slider (percent, default 0 = off) times the club's scale."""
+        pct = max(0.0, min(100.0, float(self.params.get("GearEffect", 0))))
+        scale_club = club_name if club_name in self.params else "Driver"   # unknown clubs already use Driver values
+        return (pct / 100.0) * GEAR_CLUB_SCALE.get(scale_club, IRON_GEAR_SCALE)
+
     def calculate_ball_flight(self, metrics, club_name, left_handed=False):
         """
         Calculates ball flight based on metrics dictionary from ShotProcessor.
         Direction and spin are world frame (positive = right of the target line) for both hands.
-        Handedness only matters for launch angle, which follows Open / Closed (see CONTEXT.md).
+        Handedness matters for launch angle (it follows Open / Closed, see CONTEXT.md) and for the gear effect
+        of toe/heel strikes, whose direction is mirrored for a left-hander.
         """
         ball = BallFlight()
 
@@ -91,5 +121,18 @@ class PhysicsEngine:
         # Positive = fade/slice (RH), negative = draw/hook (RH).
         face_to_path = eff_face - path
         ball.spin_axis = face_to_path * 1.0
+
+        # 6. Gear effect — a toe strike starts right and draws, a heel strike starts left and fades, for a
+        # right-hander; mirrored for a left-hander. Higher pad indices are the toe end for a right-hander and
+        # the heel end for a left-hander (same convention as swing_labels.contact_label), so the signed
+        # contact flips with the hand. Ball speed already loses a little for any off-centre strike (step 1).
+        toe_steps = face_contact * (-1.0 if left_handed else 1.0)   # positive = toward the toe
+        strength = self.gear_strength(club_name)
+        if strength > 0.0 and toe_steps != 0.0:
+            direction, axis = self._gear_magnitude(abs(toe_steps))
+            toward_toe = 1.0 if toe_steps > 0 else -1.0
+            hand = -1.0 if left_handed else 1.0   # world frame is mirrored for a left-hander
+            ball.launch_direction += hand * toward_toe * direction * strength
+            ball.spin_axis        -= hand * toward_toe * axis * strength
 
         return ball

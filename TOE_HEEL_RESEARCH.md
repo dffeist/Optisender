@@ -47,6 +47,10 @@ Data points behind the table:
 - Golf Australia, one Trackman comparison: a heel strike lost about 10 mph ball speed at similar club speed and spin nearly doubled.
 - A small high-school experiment (1" off center, 30 trials per group) found no smash factor difference between toe and heel; weight it lightly (tiny, not launch-monitor based).
 
+## Status 2026-10-28: gear effect built, off by default
+
+Implemented as the conservative tiered model recommended below (dead band at Heel/Toe, modest effect at the Far readings, capped beyond, club-scaled) behind a Tuning editor slider **Gear Effect (toe/heel)** that defaults to 0 (off). Direction is mirrored for left-handers using the same index convention as `swing_labels.contact_label`. Still to do: confirm the heel/toe direction on the physical pad, measure how much center strikes scatter in contact index, then raise the slider. See RELEASE_NOTES.md and README.md ("Gear Effect"). The original ideas list follows.
+
 ## Ideas for when we come back
 
 1. Add a gear-effect model to the engine: speed loss, start direction (HLA), spin axis and spin scaled by contact in inches (0.59" per index step), for woods much more than irons (gear effect is small on irons).

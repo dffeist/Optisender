@@ -3,6 +3,7 @@
     "FaceCompression": {
         "k": 15.0
     },
+    "GearEffect": 0,
     "Driver": {
         "BallSpeed": 1.42,
         "Vla": 12.5,

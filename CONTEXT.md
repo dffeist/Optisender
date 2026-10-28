@@ -76,6 +76,10 @@ _Avoid_: Left/right face
 The **Golfer frame** names for **Club Path**. For an RH golfer, positive is In-to-Out and negative is Out-to-In; for an LH golfer, positive is Out-to-In and negative is In-to-Out. Within 0.5° of the **Target Line** the path is Neutral for either hand.
 _Avoid_: Inside/Out, InOut, OutIn, positive/negative path, On Plane, Straight (for path)
 
+**Gear Effect**:
+How a toe or heel strike changes the ball's start direction and curve. For a right-hander a toe strike starts right and draws (curves left) and a heel strike starts left and fades; for a left-hander each is mirrored. The pad's Toe and Heel readings are the same physical sensor end for both hands, so the name changes with **Handedness** but not the ball flight.
+_Avoid_: Toe/heel effect, off-centre curve
+
 **Shot Shape**:
 The **Golfer frame** name for how the ball curves: Straight, Fade, Slice, Draw or Hook. For an RH golfer Fade and Slice curve left-to-right and Draw and Hook curve right-to-left; for an LH golfer it is the reverse. Slice and Hook are the stronger curves.
 _Avoid_: Ball flight shape, curve direction
